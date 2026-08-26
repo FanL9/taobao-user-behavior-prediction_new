@@ -1,6 +1,6 @@
 # 淘宝用户行为预测
 
-本项目基于淘宝用户行为记录，逐阶段完成数据检查、特征工程和购买预测。当前仓库包含阶段一的数据接入和只读质量检查；不包含数据清洗实现。
+本项目基于淘宝用户行为记录，逐阶段完成数据检查、特征工程和购买预测。当前仓库包含阶段一的数据接入、只读质量检查和标准数据清洗实现。
 
 ## 数据口径
 
@@ -49,6 +49,29 @@ python scripts/check_data_quality.py
 ```
 
 默认输出 `reports/stage1/data_quality_report.json`，不会修改原始 CSV，也不会生成清洗数据。
+
+
+### 阶段一标准数据清洗
+
+运行：
+
+```bash
+python scripts/clean_user_behavior.py
+```
+
+默认输入：
+
+`data/raw/user_behavior_processed.csv`
+
+默认输出：
+
+- `data/processed/user_behavior_clean.csv`
+- `data/processed/user_behavior_clean.parquet`
+- `reports/stage1/cleaning_report.json`
+
+清洗流程采用分块读取与 Hash 分区完成跨 Chunk 全局精确去重，不修改原始数据。
+
+正式清洗数据需同步至团队 Google Drive 的 `taobao/data/processed/`，GitHub 不保存数据文件本体。
 
 ## 验证
 

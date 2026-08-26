@@ -1,4 +1,4 @@
-# 项目统一口径
+﻿# 项目统一口径
 
 本文档是项目字段、文件和处理边界的权威定义。实现与本文档冲突时，以本文档为准并先通过评审修改口径。
 
@@ -22,6 +22,27 @@
 | `item_category` | int64 / INTEGER | 正整数类目标识；全项目统一使用该名称 |
 | `behavior_type` | int8 / INTEGER | 行为类型编码：`1`、`2`、`3`、`4` |
 
+## 2.1 阶段一清洗后标准数据
+
+阶段一标准清洗输出：
+
+- `data/processed/user_behavior_clean.csv`
+- `data/processed/user_behavior_clean.parquet`
+
+清洗后的标准字段顺序为：
+
+`time,user_id,item_id,category_id,behavior_type,behavior_name,behavior_date,behavior_hour,weekday`
+
+字段约定：
+
+- 原始输入继续使用 `item_category`
+- 阶段一标准清洗输出统一使用 `category_id`
+- `behavior_name`：由 `behavior_type` 映射生成
+- `behavior_date`：行为日期
+- `behavior_hour`：行为小时，取值 0~23
+- `weekday`：Monday=0，Sunday=6
+
+原始数据接口保持不变；`item_category` 到 `category_id` 的标准化仅发生在清洗输出层。
 ## 3. 产物与职责
 
 | 产物 | 固定位置 | 说明 |
@@ -45,7 +66,7 @@ CSV→Parquet 的职责仅为：校验表头、按声明类型解析、分块写
 
 - Python、SQL、文档文件使用小写 `snake_case`。
 - 可复用逻辑放在 `src/`，可执行入口放在 `scripts/`，测试放在 `tests/`。
-- 后续阶段不得把 `item_category` 私自改为 `category_id`；如需更名，必须先更新本文件和所有接口。
+- 后续阶段使用阶段一标准清洗数据时统一采用 `category_id`；若直接读取原始数据，则仍使用 `item_category`。
 - 代码、DDL 或接口发生不兼容变更时，应在 Pull Request 中说明迁移方式。
 
 ## 6. 存储与可复现性
