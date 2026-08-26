@@ -36,3 +36,38 @@ python scripts/check_data_quality.py \
 ```
 
 该命令只读取原始 CSV 并输出 JSON 检查报告，不修改输入，不删除、标记或去重，也不生成清洗数据。
+
+## 标准数据清洗命令
+
+默认运行：
+
+```bash
+python scripts/clean_user_behavior.py
+```
+
+默认输入：
+
+`data/raw/user_behavior_processed.csv`
+
+默认输出：
+
+- `data/processed/user_behavior_clean.csv`
+- `data/processed/user_behavior_clean.parquet`
+- `reports/stage1/cleaning_report.json`
+
+可选参数：
+
+- `--input`：指定输入 CSV
+- `--output-csv`：指定清洗后 CSV
+- `--output-parquet`：指定清洗后 Parquet
+- `--report`：指定 JSON 报告路径
+- `--chunksize`：每个输入 Chunk 的行数，默认 250000
+- `--partitions`：临时 Hash 分区数，默认 64
+
+查看完整帮助：
+
+```bash
+python scripts/clean_user_behavior.py --help
+```
+
+正式清洗数据文件不提交 GitHub，需同步至团队 Google Drive 的 `taobao/data/processed/`。

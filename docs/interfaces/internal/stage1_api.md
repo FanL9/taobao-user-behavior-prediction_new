@@ -53,3 +53,41 @@ write_quality_report(report, output_path) -> Path
 ```
 
 将 `check_csv_quality` 的结果写为 UTF-8 JSON，返回输出文件的绝对路径。
+
+## 标准数据清洗 API
+
+核心实现位于：
+
+- `src/data/cleaning.py`
+- `src/data/cleaning_pipeline.py`
+
+### clean_chunk
+
+`clean_chunk(chunk: pandas.DataFrame) -> ChunkCleaningResult`
+
+职责：
+
+- 校验阶段一原始五字段结构
+- 处理缺失值、非法 ID、非法行为类型和非法时间
+- 将 `item_category` 标准化为 `category_id`
+- 生成 `behavior_name`、`behavior_date`、`behavior_hour`、`weekday`
+- 不在单个 Chunk 内直接执行全局重复删除
+
+### clean_user_behavior_file
+
+`clean_user_behavior_file(input_csv, output_csv, output_parquet, report_json, chunksize=250000, partitions=64)`
+
+职责：
+
+- 分块读取全量原始 CSV
+- 调用 `clean_chunk` 完成逐块标准化
+- 使用 Hash 分区处理跨 Chunk 重复记录
+- 全局删除完全重复记录
+- 对小时级疑似重复进行统计而不盲目删除
+- 同时输出 CSV、Parquet 与 JSON 清洗报告
+
+标准输出字段顺序：
+
+`time,user_id,item_id,category_id,behavior_type,behavior_name,behavior_date,behavior_hour,weekday`
+
+其中 `weekday` 定义为 Monday=0 至 Sunday=6。
