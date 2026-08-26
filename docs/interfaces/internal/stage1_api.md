@@ -82,8 +82,10 @@ write_quality_report(report, output_path) -> Path
 - 分块读取全量原始 CSV
 - 调用 `clean_chunk` 完成逐块标准化
 - 使用 Hash 分区处理跨 Chunk 重复记录
-- 全局删除完全重复记录
-- 对小时级疑似重复进行统计而不盲目删除
+- 重复判断键统一为 `user_id + item_id + behavior_type + time`
+- 同一四元组出现 2～59 次时全部保留
+- 同一四元组出现 60 次及以上时仅保留原始输入顺序中的首次记录，其余删除，阈值 60 为包含边界
+- 当前 `time` 仅精确到小时，因此该规则属于同小时代理规则，不能解释为分钟级或秒级重复识别
 - 同时输出 CSV、Parquet 与 JSON 清洗报告
 
 标准输出字段顺序：

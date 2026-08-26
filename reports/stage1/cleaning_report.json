@@ -6,23 +6,27 @@
   "output": {
     "csv": "data\\processed\\user_behavior_clean.csv",
     "parquet": "data\\processed\\user_behavior_clean.parquet",
-    "rows": 6213379
+    "rows": 12256906
   },
   "removed": {
     "missing_rows": 0,
     "invalid_id_rows": 0,
     "invalid_behavior_rows": 0,
     "invalid_time_rows": 0,
-    "exact_duplicate_rows": 6043527
+    "high_frequency_duplicate_rows": 0
   },
-  "suspected_duplicates": {
-    "rule": "same user_id + item_id + behavior_type + time",
-    "raw_group_count": 3843197,
-    "raw_record_count": 9886724,
-    "raw_excess_count": 6043527,
-    "retained_group_count_after_exact_dedup": 0,
-    "retained_record_count_after_exact_dedup": 0,
-    "action": "reported_and_retained"
+  "duplicate_handling": {
+    "key": "user_id + item_id + behavior_type + time",
+    "threshold": 60,
+    "normal_frequency_rule": "2-59 occurrences: retain all records",
+    "normal_frequency_group_count": 3843197,
+    "normal_frequency_record_count": 9886724,
+    "high_frequency_rule": "60 or more occurrences: retain first record only",
+    "high_frequency_group_count": 0,
+    "high_frequency_record_count": 0,
+    "removed_high_frequency_rows": 0,
+    "retained_high_frequency_rows": 0,
+    "time_granularity_note": "time is hourly; this is an hourly proxy rule, not minute-level detection"
   },
   "schema": {
     "item_category_renamed_to": "category_id",
@@ -31,6 +35,6 @@
   "processing": {
     "chunksize": 250000,
     "partition_count": 64,
-    "elapsed_seconds": 97.0695724999996
+    "elapsed_seconds": 109.04001029999927
   }
 }

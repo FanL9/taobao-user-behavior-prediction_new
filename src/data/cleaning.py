@@ -61,9 +61,11 @@ def clean_chunk(chunk: pd.DataFrame) -> ChunkCleaningResult:
     This function handles field validation, invalid-row removal, type
     normalization, field renaming, and derived time/behavior fields.
 
-    Global exact-duplicate removal is intentionally handled by the full
-    cleaning pipeline rather than inside this function because duplicate
-    rows may occur in different CSV chunks.
+    Frequency-based duplicate handling is intentionally performed by the
+    full cleaning pipeline rather than inside this function because rows
+    sharing the same user/item/behavior/hour key may span multiple CSV
+    chunks. Groups with 2-59 records are retained in full; groups with
+    60 or more records retain only the first encountered record.
     """
     actual_columns = tuple(chunk.columns)
     if actual_columns != RAW_COLUMNS:

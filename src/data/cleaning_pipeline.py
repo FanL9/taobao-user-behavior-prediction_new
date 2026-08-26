@@ -1,8 +1,8 @@
 """Full stage-one cleaning pipeline.
 
 The pipeline reads the raw CSV in chunks, validates each chunk,
-partitions cleaned rows by the suspected-duplicate key, performs
-global exact deduplication, and writes cleaned CSV/Parquet outputs.
+partitions cleaned rows by the duplicate-frequency key, applies the
+hour-level frequency rule globally, and writes cleaned CSV/Parquet outputs.
 """
 
 from __future__ import annotations
@@ -20,20 +20,14 @@ import pyarrow.parquet as pq
 from src.data.cleaning import ChunkCleaningStats, clean_chunk
 
 
-SUSPECTED_DUPLICATE_KEY = (
+DUPLICATE_FREQUENCY_KEY = (
     "time",
     "user_id",
     "item_id",
     "behavior_type",
 )
 
-EXACT_DUPLICATE_KEY = (
-    "time",
-    "user_id",
-    "item_id",
-    "category_id",
-    "behavior_type",
-)
+HIGH_FREQUENCY_DUPLICATE_THRESHOLD = 60
 
 
 def _merge_chunk_stats(
@@ -59,11 +53,13 @@ def clean_user_behavior_file(
 ) -> dict:
     """Clean the complete raw user-behavior CSV.
 
-    Exact duplicates are removed globally, including duplicates that
-    occur in different input chunks.
+    Duplicate handling uses the four-field key
+    user_id + item_id + behavior_type + time. Groups occurring 2-59
+    times are retained in full. Groups occurring 60 times or more retain
+    only the first record encountered in the original input stream.
 
-    Suspected duplicates sharing user/item/behavior/hour are reported
-    but are retained.
+    Because ``time`` is hour-level, this is an hourly proxy rule rather
+    than minute- or second-level duplicate detection.
     """
     if chunksize <= 0:
         raise ValueError("chunksize must be greater than zero.")
@@ -118,7 +114,7 @@ def clean_user_behavior_file(
     try:
         # Pass 1:
         # Clean each input chunk and hash-partition rows.
-        # Rows sharing the suspected-duplicate key always go to
+        # Rows sharing the duplicate-frequency key always go to
         # the same partition, including rows from different chunks.
         for chunk_number, chunk in enumerate(
             pd.read_csv(
@@ -146,7 +142,7 @@ def clean_user_behavior_file(
                 continue
 
             hashes = pd.util.hash_pandas_object(
-                cleaned[list(SUSPECTED_DUPLICATE_KEY)],
+                cleaned[list(DUPLICATE_FREQUENCY_KEY)],
                 index=False,
             ).to_numpy()
 
@@ -185,21 +181,19 @@ def clean_user_behavior_file(
 
         partition_writers.clear()
 
-        exact_duplicates_removed = 0
+        normal_frequency_groups = 0
+        normal_frequency_records = 0
 
-        suspected_raw_groups = 0
-        suspected_raw_records = 0
-        suspected_raw_excess = 0
-
-        suspected_retained_groups = 0
-        suspected_retained_records = 0
+        high_frequency_groups = 0
+        high_frequency_records = 0
+        high_frequency_rows_removed = 0
 
         final_rows = 0
         csv_header_written = False
 
         # Pass 2:
-        # Duplicate-key groups are now contained within individual
-        # partitions, so exact deduplication is global.
+        # Duplicate-frequency groups are fully contained within individual
+        # partitions, so the 60+ threshold is enforced globally.
         for partition_number, partition_path in enumerate(
             partition_paths,
             start=1,
@@ -215,55 +209,63 @@ def clean_user_behavior_file(
 
             frame = pd.read_parquet(partition_path)
 
-            raw_group_sizes = frame.groupby(
-                list(SUSPECTED_DUPLICATE_KEY),
+            group_sizes = frame.groupby(
+                list(DUPLICATE_FREQUENCY_KEY),
                 dropna=False,
                 sort=False,
             ).size()
 
-            raw_suspected = raw_group_sizes[
-                raw_group_sizes > 1
+            normal_sizes = group_sizes[
+                (group_sizes >= 2)
+                & (
+                    group_sizes
+                    < HIGH_FREQUENCY_DUPLICATE_THRESHOLD
+                )
             ]
 
-            suspected_raw_groups += int(
-                len(raw_suspected)
+            high_sizes = group_sizes[
+                group_sizes
+                >= HIGH_FREQUENCY_DUPLICATE_THRESHOLD
+            ]
+
+            normal_frequency_groups += int(
+                len(normal_sizes)
             )
-            suspected_raw_records += int(
-                raw_suspected.sum()
-            )
-            suspected_raw_excess += int(
-                (raw_suspected - 1).sum()
+            normal_frequency_records += int(
+                normal_sizes.sum()
             )
 
-            before_dedup = len(frame)
+            high_frequency_groups += int(
+                len(high_sizes)
+            )
+            high_frequency_records += int(
+                high_sizes.sum()
+            )
 
-            frame = frame.drop_duplicates(
-                subset=list(EXACT_DUPLICATE_KEY),
+            row_group_sizes = frame.groupby(
+                list(DUPLICATE_FREQUENCY_KEY),
+                dropna=False,
+                sort=False,
+            )["category_id"].transform("size")
+
+            # Partition writers append chunks in source order and each
+            # partition preserves row order, so keep="first" preserves
+            # the first encountered record from the input stream.
+            repeated_after_first = frame.duplicated(
+                subset=list(DUPLICATE_FREQUENCY_KEY),
                 keep="first",
             )
 
-            exact_duplicates_removed += (
-                before_dedup - len(frame)
+            remove_mask = (
+                row_group_sizes
+                >= HIGH_FREQUENCY_DUPLICATE_THRESHOLD
+            ) & repeated_after_first
+
+            high_frequency_rows_removed += int(
+                remove_mask.sum()
             )
 
-            retained_group_sizes = frame.groupby(
-                list(SUSPECTED_DUPLICATE_KEY),
-                dropna=False,
-                sort=False,
-            ).size()
-
-            retained_suspected = retained_group_sizes[
-                retained_group_sizes > 1
-            ]
-
-            suspected_retained_groups += int(
-                len(retained_suspected)
-            )
-
-            suspected_retained_records += int(
-                retained_suspected.sum()
-            )
-
+            frame = frame.loc[~remove_mask].copy()
             frame = frame.reset_index(drop=True)
 
             final_rows += len(frame)
@@ -342,31 +344,43 @@ def clean_user_behavior_file(
                     "removed_invalid_time_rows",
                     0,
                 ),
-                "exact_duplicate_rows": (
-                    exact_duplicates_removed
+                "high_frequency_duplicate_rows": (
+                    high_frequency_rows_removed
                 ),
             },
-            "suspected_duplicates": {
-                "rule": (
-                    "same user_id + item_id + "
-                    "behavior_type + time"
+            "duplicate_handling": {
+                "key": (
+                    "user_id + item_id + behavior_type + time"
                 ),
-                "raw_group_count": (
-                    suspected_raw_groups
+                "threshold": HIGH_FREQUENCY_DUPLICATE_THRESHOLD,
+                "normal_frequency_rule": (
+                    "2-59 occurrences: retain all records"
                 ),
-                "raw_record_count": (
-                    suspected_raw_records
+                "normal_frequency_group_count": (
+                    normal_frequency_groups
                 ),
-                "raw_excess_count": (
-                    suspected_raw_excess
+                "normal_frequency_record_count": (
+                    normal_frequency_records
                 ),
-                "retained_group_count_after_exact_dedup": (
-                    suspected_retained_groups
+                "high_frequency_rule": (
+                    "60 or more occurrences: retain first record only"
                 ),
-                "retained_record_count_after_exact_dedup": (
-                    suspected_retained_records
+                "high_frequency_group_count": (
+                    high_frequency_groups
                 ),
-                "action": "reported_and_retained",
+                "high_frequency_record_count": (
+                    high_frequency_records
+                ),
+                "removed_high_frequency_rows": (
+                    high_frequency_rows_removed
+                ),
+                "retained_high_frequency_rows": (
+                    high_frequency_groups
+                ),
+                "time_granularity_note": (
+                    "time is hourly; this is an hourly proxy rule, "
+                    "not minute-level detection"
+                ),
             },
             "schema": {
                 "item_category_renamed_to": (
