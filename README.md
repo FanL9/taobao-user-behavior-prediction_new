@@ -68,5 +68,4 @@ python -m pytest
 - [阶段一命令行接口](docs/interfaces/external/stage1_cli.md)
 - [Data 目录说明](docs/data/data_structure.md)
 - [数据质量检查与后续处理规则](docs/data/data_quality_rules.md)
-- [CSV 转 Parquet 性能记录](reports/stage1/csv_to_parquet_performance.md)
-- [数据质量检查性能记录](reports/stage1/data_quality_performance.md)
+- [阶段一功能与性能测试结果](reports/stage1/stage1_test_results.md)
