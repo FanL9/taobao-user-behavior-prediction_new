@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# IDE / operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+
+# Large local data (shared through Google Drive, never committed)
+# Ignore every file under data/, regardless of its name or extension.
+data/**
+!data/**/
+!data/**/.gitkeep
+
+*.csv
+*.parquet
+*.arrow
+*.feather
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Generated runtime artifacts
+outputs/**
+artifacts/**
+experiments/runs/**
+experiments/tracking/**
+models/**
+
+# Keep the repository directory skeleton
+!.gitkeep
+!**/.gitkeep
