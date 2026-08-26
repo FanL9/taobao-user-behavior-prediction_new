@@ -1,4 +1,4 @@
-# 阶段一 Member1：命令行外部接口
+# 阶段一：命令行外部接口
 
 所有命令都从仓库根目录执行；成功退出码为 `0`，失败退出码为 `1`，错误写入标准错误。
 
@@ -24,3 +24,15 @@ python scripts/convert_csv_to_parquet.py \
 ```
 
 可选 `--overwrite` 允许替换已有输出。成功输出输入/输出绝对路径、行数、文件字节数和耗时。默认拒绝覆盖，避免误删本地大文件。
+
+## 数据质量检查
+
+```bash
+python scripts/check_data_quality.py \
+  --input data/raw/user_behavior_processed.csv \
+  --output reports/stage1/data_quality_report.json \
+  --chunksize 100000 \
+  --duplicate-partitions 32
+```
+
+该命令只读取原始 CSV 并输出 JSON 检查报告，不修改输入，不删除、标记或去重，也不生成清洗数据。

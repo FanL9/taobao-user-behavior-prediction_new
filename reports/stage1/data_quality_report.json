@@ -1,0 +1,74 @@
+{
+  "input": {
+    "file_name": "user_behavior_processed.csv",
+    "size_bytes": 492264642,
+    "columns": [
+      "time",
+      "user_id",
+      "item_id",
+      "item_category",
+      "behavior_type"
+    ]
+  },
+  "scale": {
+    "row_count": 12256906,
+    "column_count": 5,
+    "unique_user_count": 10000,
+    "unique_item_count": 2876947,
+    "unique_category_count": 8916
+  },
+  "completeness": {
+    "rows_with_any_missing": 0,
+    "missing_by_column": {
+      "time": 0,
+      "user_id": 0,
+      "item_id": 0,
+      "item_category": 0,
+      "behavior_type": 0
+    }
+  },
+  "validity": {
+    "invalid_by_column": {
+      "time": 0,
+      "user_id": 0,
+      "item_id": 0,
+      "item_category": 0,
+      "behavior_type": 0
+    },
+    "valid_behavior_counts": {
+      "1": 11550581,
+      "2": 242556,
+      "3": 343564,
+      "4": 120205
+    },
+    "valid_time_min": "2025-11-18 00",
+    "valid_time_max": "2025-12-18 23"
+  },
+  "duplicates": {
+    "exact_rows": {
+      "group_count": 3843197,
+      "record_count": 9886724,
+      "excess_count": 6043527
+    },
+    "suspected_key": {
+      "columns": [
+        "user_id",
+        "item_id",
+        "behavior_type",
+        "time"
+      ],
+      "group_count": 3843197,
+      "record_count": 9886724,
+      "excess_count": 6043527
+    }
+  },
+  "decisions": {
+    "source_modified": false,
+    "cleaning_performed": false,
+    "exact_duplicates_removed": false,
+    "suspected_duplicates_removed": false,
+    "id_outlier_method": "none"
+  },
+  "status": "REVIEW",
+  "elapsed_seconds": 374.499165
+}

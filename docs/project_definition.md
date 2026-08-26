@@ -30,7 +30,7 @@
 | 原始 Parquet | `data/raw/user_behavior_processed.parquet` | CSV 的类型化副本，行数和列顺序保持一致 |
 | SQLite | `database/taobao_user_behavior.db` | 任务要求的空表结构，不参与后续 Parquet 数据流 |
 | DDL | `sql/ddl/001_create_schema.sql` | 仅定义空表结构 |
-| 性能记录 | `reports/stage1/member1_performance.md` | 阶段一性能测试结果 |
+| 性能记录 | `reports/stage1/csv_to_parquet_performance.md` | CSV 转 Parquet 性能测试结果 |
 
 CSV→Parquet 的职责仅为：校验表头、按声明类型解析、分块写入、返回行数/文件大小/耗时。它不负责修正缺失值、过滤异常、删除重复、排序、导入 SQLite 或生成分析指标。
 

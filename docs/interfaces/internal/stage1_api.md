@@ -1,4 +1,4 @@
-# 阶段一 Member1：Python 内部接口
+# 阶段一：Python 内部接口
 
 ## `src.data.convert_csv_to_parquet`
 
@@ -31,3 +31,25 @@ initialize_database(database_path, schema_path=DEFAULT_SCHEMA_PATH) -> DatabaseS
 ## 兼容性规则
 
 上述公开导入路径、参数名、返回字段和异常语义均视为内部稳定接口。变更前需要同步更新测试、外部 CLI 文档和 `docs/project_definition.md`。
+
+## `src.data.check_csv_quality`
+
+```python
+check_csv_quality(
+    csv_path,
+    *,
+    chunksize=100_000,
+    encoding="utf-8-sig",
+    duplicate_partitions=32,
+) -> dict
+```
+
+只读检查原始 CSV，返回数据规模、完整性、合法性、完全重复和疑似重复统计。函数使用临时 Parquet 分区完成跨分块重复检查；临时文件自动删除，不修改输入，也不生成清洗数据。
+
+## `src.data.write_quality_report`
+
+```python
+write_quality_report(report, output_path) -> Path
+```
+
+将 `check_csv_quality` 的结果写为 UTF-8 JSON，返回输出文件的绝对路径。

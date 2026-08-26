@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import subprocess
 import sys
@@ -63,3 +64,27 @@ def test_database_and_conversion_cli(tmp_path) -> None:
     )
     assert conversion_run.returncode == 0, conversion_run.stderr
     assert pq.read_table(destination).num_rows == 1
+
+    quality_report = tmp_path / "quality.json"
+    quality_run = subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "scripts" / "check_data_quality.py"),
+            "--input",
+            str(source),
+            "--output",
+            str(quality_report),
+            "--chunksize",
+            "1",
+            "--duplicate-partitions",
+            "2",
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert quality_run.returncode == 0, quality_run.stderr
+    report = json.loads(quality_report.read_text(encoding="utf-8"))
+    assert report["scale"]["row_count"] == 1
+    assert report["decisions"]["cleaning_performed"] is False

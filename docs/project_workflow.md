@@ -6,6 +6,7 @@
 | 从 Google Drive 下载阶段一源数据 | `data/raw/user_behavior_processed.csv` |
 | 运行 `python scripts/setup_local_database.py` | `database/taobao_user_behavior.db` 空表结构 |
 | 运行 `python scripts/convert_csv_to_parquet.py` | `data/raw/user_behavior_processed.parquet` |
+| 运行 `python scripts/check_data_quality.py` | `reports/stage1/data_quality_report.json`，不生成清洗数据 |
 | 运行 `python -m pytest` | 功能和性能测试结果 |
 
 所有 `data/` 文件从 Google Drive 获取或回传，不上传 GitHub；目录用途见 `docs/data/data_structure.md`。

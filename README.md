@@ -1,6 +1,6 @@
 # 淘宝用户行为预测
 
-本项目基于淘宝用户浏览、收藏、加购和购买记录，逐阶段完成数据治理、探索分析、特征工程和购买预测。当前仓库已完成阶段一 Member1 的基础设施：空 SQLite 数据库结构、CSV 转 Parquet、统一口径、接口说明以及功能与性能测试。
+本项目基于淘宝用户行为记录，逐阶段完成数据检查、特征工程和购买预测。当前仓库包含阶段一的数据接入和只读质量检查；不包含数据清洗实现。
 
 ## 数据口径
 
@@ -42,6 +42,14 @@ python scripts/convert_csv_to_parquet.py
 
 默认输出为 `data/raw/user_behavior_processed.parquet`。已有输出不会被覆盖；确认需要重建时添加 `--overwrite`。查看所有参数可运行 `python scripts/convert_csv_to_parquet.py --help`。
 
+4. 对原始 CSV 做只读质量检查：
+
+```bash
+python scripts/check_data_quality.py
+```
+
+默认输出 `reports/stage1/data_quality_report.json`，不会修改原始 CSV，也不会生成清洗数据。
+
 ## 验证
 
 ```bash
@@ -56,7 +64,9 @@ python -m pytest
 
 - [统一口径](docs/project_definition.md)
 - [项目工作流程](docs/project_workflow.md)
-- [Python 内部接口](docs/interfaces/internal/stage1_member1_api.md)
-- [命令行外部接口](docs/interfaces/external/stage1_member1_cli.md)
+- [阶段一 Python 内部接口](docs/interfaces/internal/stage1_api.md)
+- [阶段一命令行接口](docs/interfaces/external/stage1_cli.md)
 - [Data 目录说明](docs/data/data_structure.md)
-- [阶段一性能记录](reports/stage1/member1_performance.md)
+- [数据质量检查与后续处理规则](docs/data/data_quality_rules.md)
+- [CSV 转 Parquet 性能记录](reports/stage1/csv_to_parquet_performance.md)
+- [数据质量检查性能记录](reports/stage1/data_quality_performance.md)
