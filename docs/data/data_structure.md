@@ -1,35 +1,51 @@
 # Data 目录说明
 
-`data/` 下的所有数据文件统一存放在团队 Google Drive，GitHub 只保留目录中的 `.gitkeep`。
+`data/` 下的所有数据文件统一存放在团队 Google Drive 的 `taobao/data/`，GitHub 只保留目录骨架中的 `.gitkeep`。下载或回传数据时保持相同的相对路径。
+
+## 目录结构
 
 | 目录 | 简短说明 |
 | --- | --- |
-| `data/raw/` | 原始 CSV 和由其直接转换的原始 Parquet |
-| `data/interim/` | 数据处理过程中的临时中间结果 |
-| `data/processed/` | 完成清洗和标准化后的数据 |
-| `data/features/` | 特征工程生成的特征数据 |
-| `data/samples/` | 调试、抽样和快速验证使用的数据 |
-| `data/splits/` | 训练集、验证集和测试集 |
-| `data/predictions/` | 模型预测结果 |
+| `data/raw/` | 原始行为数据及其格式转换结果 |
+| `data/processed/` | 完成清洗和标准化的数据 |
+| `data/EDA/` | 阶段一 EDA 统计输出 |
+| `data/interim/` | 阶段二四张基础中间表 |
+| `data/features/` | 后续特征工程输出 |
+| `data/sample/` | 调试和快速验证用样例数据 |
+| `data/splits/` | 后续训练、验证和测试数据 |
+| `data/predictions/` | 后续模型预测结果 |
 
-阶段一使用 `data/raw/user_behavior_processed.csv`，转换后输出 `data/raw/user_behavior_processed.parquet`。其他目录由后续阶段按实际任务使用。
+## Raw 与 processed 数据
 
-从 Google Drive 下载文件后放回相同的相对路径；新增数据产物也上传到 Google Drive 的对应目录。禁止使用 `git add -f`、Git LFS 或修改忽略规则把 `data/` 文件上传到 GitHub。
+| 文件 | 简短说明 |
+| --- | --- |
+| `data/raw/user_behavior_processed.csv` | 阶段一使用的原始用户行为数据 |
+| `data/raw/user_behavior_processed.parquet` | 原始 CSV 的 Parquet 转换结果 |
+| `data/processed/user_behavior_clean.csv` | 云盘保留的标准清洗 CSV 副本，不作为后续阶段输入 |
+| `data/processed/user_behavior_clean.parquet` | 清洗和标准化后的正式数据，后续阶段统一读取此文件 |
 
-## 阶段一标准清洗数据
+## EDA 数据
 
-阶段一标准清洗完成后生成：
+| 文件 | 简短说明 |
+| --- | --- |
+| `data/EDA/behavior_distribution.csv` | 四类行为数量分布 |
+| `data/EDA/category_statistics.csv` | 类目维度行为统计 |
+| `data/EDA/daily_behavior.csv` | 日期维度行为统计 |
+| `data/EDA/descriptive_funnel.csv` | 基础行为漏斗统计 |
+| `data/EDA/hourly_behavior.csv` | 小时维度行为统计 |
+| `data/EDA/item_statistics.csv` | 商品维度行为统计 |
+| `data/EDA/performance_test_result.csv` | EDA 性能测试结果 |
+| `data/EDA/top_10_category.csv` | 行为量最高的 10 个类目 |
+| `data/EDA/top_10_item.csv` | 行为量最高的 10 个商品 |
+| `data/EDA/user_purchase_summary.csv` | 用户购买情况汇总 |
 
-- `data/processed/user_behavior_clean.csv`
-- `data/processed/user_behavior_clean.parquet`
+## 阶段二中间表
 
-两份文件的数据内容一致：
+| 文件 | 简短说明 |
+| --- | --- |
+| `data/interim/user_intermediate.parquet` | 用户粒度历史行为中间统计 |
+| `data/interim/item_intermediate.parquet` | 商品粒度历史行为中间统计 |
+| `data/interim/category_intermediate.parquet` | 类目粒度历史行为中间统计 |
+| `data/interim/time_intermediate.parquet` | 日期和小时粒度历史行为中间统计 |
 
-- CSV 用于通用查看、交换与兼容性场景
-- Parquet 用于后续 EDA、特征工程和建模等高效分析场景
-
-正式数据文件同步保存至团队 Google Drive：
-
-`taobao/data/processed/`
-
-GitHub 仅保存目录骨架、代码、测试、文档与清洗报告，不提交上述数据文件。
+禁止使用 `git add -f`、Git LFS 或修改忽略规则将任何 `data/` 数据文件上传到 GitHub。
