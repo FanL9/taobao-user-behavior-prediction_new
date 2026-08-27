@@ -6,7 +6,7 @@ import pandas as pd
 # ============================================================
 
 INPUT_FILE = "data/processed/user_behavior_clean.parquet"
-OUTPUT_DIR = "data/interim"
+OUTPUT_DIR = "data/EDA"
 
 BEHAVIOR_TYPES = ["pv", "fav", "cart", "buy"]
 
