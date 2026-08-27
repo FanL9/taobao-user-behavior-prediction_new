@@ -6,10 +6,10 @@
 
 ## 1. 数据说明
 
-- 正式输入：`data/processed/user_behavior_clean.parquet`,`src/data/EDA_analysis.py`
+- 正式输入：`data/processed/user_behavior_clean.parquet`
 - 数据规模：12,256,906 条行为记录
 - 时间范围：2025-11-18 00:00:00 至 2025-12-18 23:00:00
-- 统计实现：`src/data/basic_analysis.py` 和 `sql/basic_analysis/basic_behavior_statistics.sql`
+- 统计实现：`src/data/EDA_analysis.py`
 - 输出目录：`data/interim/`
 - 输出文件：`behavior_distribution.csv`、`user_purchase_summary.csv`、`item_statistics.csv`、`top_10_item.csv`、`category_statistics.csv`、`top_10_category.csv`、`daily_behavior.csv`、`hourly_behavior.csv`、`behavior_hourly_distribution.csv`、`descriptive_funnel.csv`、`performance_test_result.csv`
 
