@@ -10,7 +10,7 @@
 - 数据规模：12,256,906 条行为记录
 - 时间范围：2025-11-18 00:00:00 至 2025-12-18 23:00:00
 - 统计实现：`src/data/EDA_analysis.py`,`tests/functional/test_EDA.py`,`tests/performance/test_EDA_analysis_performance.py`
-- 输出目录：`data/EDA/`
+- 输出目录：`data/EDA`
 - 输出文件：`behavior_distribution.csv`、`user_purchase_summary.csv`、`item_statistics.csv`、`top_10_item.csv`、`category_statistics.csv`、`top_10_category.csv`、`daily_behavior.csv`、`hourly_behavior.csv`、`behavior_hourly_distribution.csv`、`descriptive_funnel.csv`、`performance_test_result.csv`
 
 本报告仅使用当前正式 clean 数据及其重新生成的 EDA 表。旧版 6,213,379 行统计结果不再使用。
