@@ -93,3 +93,307 @@ write_quality_report(report, output_path) -> Path
 `time,user_id,item_id,category_id,behavior_type,behavior_name,behavior_date,behavior_hour,weekday`
 
 其中 `weekday` 定义为 Monday=0 至 Sunday=6。
+
+
+
+---
+
+# EDA Analysis API
+
+## `src/data/EDA_analysis.py::main`
+
+```python
+main() -> None
+```
+
+运行完整 EDA pipeline。
+
+该函数作为 EDA 分析阶段的正式运行入口，负责加载清洗后的用户行为数据，并调用各统计模块生成分析结果。
+
+输入：
+- `data/processed/user_behavior_clean.parquet`
+
+数据规模：
+- 12,256,906 条行为记录
+- 时间范围：2025-11-18 00:00:00 至 2025-12-18 23:00:00
+
+输出目录：
+- data/EDA
+
+生成文件：
+- `behavior_distribution.csv`
+- `user_purchase_summary.csv`
+- `item_statistics.csv`
+- `top_10_item.csv`
+- `category_statistics.csv`
+- `top_10_category.csv`
+- `daily_behavior.csv`
+- `hourly_behavior.csv`
+- `descriptive_funnel.csv`
+
+异常约定：
+- 输入文件不存在时抛出 `FileNotFoundError`
+- 输入数据缺少必要字段时抛出 `ValueError`
+- 输出路径不可写时抛出 `OSError`
+
+
+## `src/data/EDA_analysis.py::load_data`
+
+
+```python
+load_data(
+    file_path
+) -> pandas.DataFrame
+```
+
+读取清洗后的用户行为 Parquet 数据。
+
+输入：
+- `file_path`：Parquet 文件路径
+
+返回：
+- `pandas.DataFrame`
+该函数仅负责数据加载，不执行额外的数据清洗或转换。
+
+## `src/data/EDA_analysis.py::calculate_behavior_distribution`
+```python
+calculate_behavior_distribution(
+    df
+) -> pandas.DataFrame
+```
+
+统计整体用户行为分布。
+
+返回字段：
+- `behavior_type`
+- `behavior_name`
+- `behavior_count`
+- `percentage`
+
+用于生成：
+
+`behavior_distribution.csv`
+
+
+
+## `src/data/EDA_analysis.py::calculate_user_purchase_summary`
+```python
+calculate_user_purchase_summary(
+    df
+) -> pandas.DataFrame
+```
+统计用户购买行为相关指标。
+
+返回字段：
+- `total_behavior_count`
+- `purchase_count`
+- `purchase_users`
+- `non_purchase_users`
+- `repeat_purchase_users`
+
+其中：
+- `repeat_purchase_users` 定义为购买次数大于等于 2 次的用户。
+
+
+## `src/data/EDA_analysis.py::calculate_item_statistics`
+```python
+calculate_item_statistics(
+    df
+) -> pandas.DataFrame
+```
+统计商品维度的用户行为情况。
+
+返回字段：
+- `item_id`
+- `pv_count`
+- `fav_count`
+- `cart_count`
+- `buy_count`
+
+用于生成：
+- `item_statistics.csv`
+- `top_10_item.csv`
+
+
+## `src/data/EDA_analysis.py::get_top_10_items`
+```python
+get_top_10_items(
+    item_statistics
+) -> pandas.DataFrame
+```
+根据商品购买次数筛选热门商品。
+
+输入：
+- `item_statistics`：商品行为统计结果
+
+返回：
+-按 `buy_count` 降序排列的 Top 10 商品
+
+用于生成：
+- `top_10_item.csv`
+
+
+
+## `src/data/EDA_analysis.py::calculate_category_statistics`
+```python
+calculate_category_statistics(
+    df
+) -> pandas.DataFrame
+```
+统计商品类目维度的用户行为情况。
+
+返回字段：
+- `category_id`
+- `behavior_count`
+- `buy_count`
+- `buy_percentage`
+
+其中：
+- `buy_percentage` 表示该类目购买次数占全部购买次数的比例。
+
+用于生成：
+- `category_statistics.csv`
+- `top_10_category.csv`
+
+
+
+## `src/data/EDA_analysis.py::get_top_10_categories`
+```python
+get_top_10_categories(
+    category_statistics
+) -> pandas.DataFrame
+```
+根据类目购买次数筛选热门类目。
+
+输入：
+- `category_statistics`：类目行为统计结果
+
+返回：
+
+- 按 `buy_count` 降序排列的 Top 10 类目
+
+用于生成：
+
+- `top_10_category.csv`
+
+
+## `src/data/EDA_analysis.py::calculate_daily_behavior`
+```python
+calculate_daily_behavior(
+    df
+) -> pandas.DataFrame
+```
+统计日期维度的用户行为分布。
+
+返回字段：
+- `behavior_date`
+- `pv_count`
+- `fav_count`
+- `cart_count`
+- `buy_count`
+
+用于生成：
+- `daily_behavior.csv`
+
+
+
+## `src/data/EDA_analysis.py::calculate_hourly_behavior`
+```python
+calculate_hourly_behavior(
+    df
+) -> pandas.DataFrame
+```
+统计小时维度的用户行为分布。
+
+返回字段：
+- `behavior_hour`
+- `pv_count`
+- `fav_count`
+- `cart_count`
+- `buy_count`
+
+用于生成：
+- `hourly_behavior.csv`
+
+
+## `src/data/EDA_analysis.py::calculate_descriptive_funnel`
+```python
+calculate_descriptive_funnel(
+    df
+) -> pandas.DataFrame
+```
+构建描述性用户行为转化漏斗。
+
+统计阶段：
+- `PV`
+- `Favorite`
+- `Cart`
+- `Purchase`
+
+返回字段：
+- `stage`
+- `behavior_count`
+- `relative_to_pv_percentage`
+
+用于生成：
+- `descriptive_funnel.csv`
+
+
+# EDA Testing
+## Functional Test
+
+测试文件：
+- `tests/functional/test_EDA.py`
+
+功能测试用于验证 EDA pipeline 是否正常运行，并检查：
+- 所有输出 CSV 文件是否成功生成
+- 输出字段是否符合预期
+- 行为类型统计是否完整
+- Top 10 商品和类目是否按照购买次数排序
+- 日期和小时维度统计结构是否正确
+- 转化漏斗阶段是否完整
+
+
+## Performance Test
+
+测试文件：
+- `tests/performance/test_EDA_analysis_performance.py`
+
+性能测试用于记录 EDA pipeline 的运行效率。
+
+测试指标包括：
+- `runtime_seconds`
+- `CPU usage`
+- `GPU usage`
+
+测试结果保存至：
+- `data/EDA/performance_test_result.csv`
+
+## Compatibility Rules
+
+上述 EDA 接口的：
+- 函数名称
+- 输入参数
+- 返回格式
+- 输出文件结构
+
+均视为稳定接口。
+
+若修改 EDA 计算逻辑或接口定义，需要同步更新：
+
+- `tests/functional/test_EDA.py`
+- `tests/performance/test_EDA_analysis_performance.py`
+- EDA 输出说明文档
+
+
+
+
+
+
+
+
+
+
+
+
+
