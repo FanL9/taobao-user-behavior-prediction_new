@@ -12,7 +12,7 @@ INPUT_FILE = (
 )
 
 OUTPUT_DIR = (
-    "data/feature"
+    "data/features"
 )
 
 # Output files
