@@ -61,3 +61,83 @@
 | `unique_category_count` | 日期—小时类目数 | `category_id` 去重计数 | clean Parquet | 日期—小时 | 否，中间统计字段 |
 
 `event_count` 和四类行为计数字段适用于上述四张表，其具体粒度由所在表决定。转化率字段本阶段不落表，公式见 `feature_engineering_spec.md`。
+
+## `user_features.parquet`
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | train / validation / test |
+| `user_id` | 用户 ID |
+| `history_start` | 历史行为窗口开始日期 |
+| `history_end` | 历史行为窗口结束日期 |
+| `label_date` | 对应的标签日期 |
+| `event_count` | 用户在 history window 内的总行为次数 |
+| `pv_count` | 浏览次数 |
+| `fav_count` | 收藏次数 |
+| `cart_count` | 加购次数 |
+| `buy_count` | 购买次数 |
+| `buy_conversion_rate` | `buy_count` / `event_count` |
+
+## `user_activity_features.parquet`
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `Column` | 定义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `user_id` | 用户唯一标识 |
+| `item_id` | 商品唯一标识 |
+| `history_start` | 当前 history window 开始日期 |
+| `history_end` | 当前 history window 结束日期 |
+| `label_date` | 当前预测/label 日期 |
+| `last_behavior_type` | history window 内该 user‑item 最后一次行为类型 |
+| `last_behavior_hour` | 最后一次行为发生的小时，0–23 |
+| `last_behavior_days_ago` | 从 label_date 00:00:00 到最后一次行为的时间间隔，单位为天 |
+| `last_10_behavior_sequence` | history window 内该 user‑item 最近最多10次行为，按时间先后排列；不足10次则保留全部 |
+| `pv_to_cart_count` | history window 内相邻 pv → cart 的次数 |
+| `cart_to_buy_count` | history window 内相邻 cart → buy 的次数 |
+| `pv_to_buy_count` | history window 内相邻 pv → buy 的次数 |
+| `fav_to_buy_count` | history window 内相邻 fav → buy 的次数 |
+
+## `user_sequence_features.parquet`
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `user_id` | 用户唯一标识 |
+| `item_id` | 商品唯一标识 |
+| `history_start` | 当前 history window 开始日期 |
+| `history_end` | 当前 history window 结束日期 |
+| `label_date` | 当前预测/label 日期 |
+| `last_behavior_type` | history window 内该 user‑item 最后一次行为类型 |
+| `last_behavior_hour` | 最后一次行为发生的小时，0–23 |
+| `last_behavior_days_ago` | 从 label_date 00:00:00 到最后一次行为的时间间隔，单位为天 |
+| `last_10_behavior_sequence` | history window 内该 user‑item 最近最多10次行为，按时间先后排列；不足10次则保留全部 |
+| `pv_to_cart_count` | history window 内相邻 pv → cart 的次数 |
+| `cart_to_buy_count` | history window 内相邻 cart → buy 的次数 |
+| `pv_to_buy_count` | history window 内相邻 pv → buy 的次数 |
+| `fav_to_buy_count` | history window 内相邻 fav → buy 的次数 |
+
+## `item_behavior_features.parquet`
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `item_id` | 商品唯一标识 |
+| `category_id` | 商品所属类别 |
+| `history_start` | 当前 history window 开始日期 |
+| `history_end` | 当前 history window 结束日期 |
+| `label_date` | 当前预测/label 日期；该日期及之后行为不能用于构造特征 |
+| `item_total_count` | 当前 history window 内该商品的总行为次数 |
+| `item_pv_count` | 当前 history window 内该商品被浏览（PV）的次数 |
+| `item_fav_count` | 当前 history window 内该商品被收藏的次数 |
+| `item_cart_count` | 当前 history window 内该商品被加购的次数 |
+| `item_buy_count` | 当前 history window 内该商品被购买的次数 |
+| `item_unique_user_count` | 当前 history window 内与该商品发生过至少一次行为的不同用户数 |
+| `item_unique_buyer_count` | 当前 history window 内购买过该商品的不同用户数 |
+| `item_active_day_count` | 当前 history window 内该商品发生行为的不同日期数 |
+| `item_fav_to_pv_rate` | `item_fav_count` / `item_pv_count`；PV=0时设为0 |
+| `item_cart_to_pv_rate` | `item_cart_count` / `item_pv_count`；PV=0时设为0 |
+| `item_buy_to_pv_rate` | `item_buy_count` / `item_pv_count`；PV=0时设为0 |
+| `item_heat_level` | 基于训练集固定阈值划分的商品热度等级 |
+
