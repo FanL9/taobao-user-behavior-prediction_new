@@ -8,11 +8,11 @@ import numpy as np
 
 # 以后如果路径变了，只需要修改这里
 INPUT_FILE = (
-    r"C:\Users\Hongshucham\Desktop\827\user_behavior_clean.parquet"
+    "data/processed/user_behavior_clean.parquet"
 )
 
 OUTPUT_DIR = (
-    r"C:\Users\Hongshucham\Desktop\827"
+    "data/feature"
 )
 
 # Output files
