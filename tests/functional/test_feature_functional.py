@@ -6,7 +6,7 @@ import numpy as np
 # Configuration
 # ============================================================
 
-BASE_PATH = r"C:\Users\Hongshucham\Desktop\827"
+BASE_PATH = r"data\features"
 
 RAW_FILE = rf"{BASE_PATH}\user_behavior_clean.parquet"
 
