@@ -30,3 +30,17 @@ generate_intermediate_tables(input_parquet, output_directory, windows=HISTORY_WI
 ```
 
 读取 clean Parquet，生成四个 Parquet 文件，并返回表名到绝对路径的映射。正式默认路径由命令行脚本指定。
+
+## 前四张特征表接口
+
+```python
+build_feature_tables(clean_data, windows=HISTORY_WINDOWS) -> dict[str, DataFrame]
+```
+
+输入阶段一 clean DataFrame，返回且只返回 `user_basic`、`user_activity`、`user_sequence`、`item_behavior` 四张特征表。用户序列表为 `user_id + item_id` 粒度；活跃等级阈值只由训练窗口计算。
+
+```python
+generate_feature_tables(input_parquet, output_directory, windows=HISTORY_WINDOWS) -> dict[str, Path]
+```
+
+读取 clean Parquet 并原子写入四张特征表。该接口不生成其余四张特征表、标签或最终宽表。

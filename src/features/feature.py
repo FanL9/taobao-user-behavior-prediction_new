@@ -1,1559 +1,518 @@
-import pandas as pd
+"""Build the first four stage-two feature tables.
+
+This module creates only user basic behavior, user activity, user-item behavior
+sequence, and item behavior feature tables. Item popularity, category behavior,
+time behavior, conversion-chain features, labels, and a final wide table are
+outside this module's scope.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Iterable
+
 import numpy as np
+import pandas as pd
+
+from .stage2_intermediate_tables import HISTORY_WINDOWS, HistoryWindow
 
 
-# ============================================================
-# Configuration
-# ============================================================
-
-# 以后如果路径变了，只需要修改这里
-INPUT_FILE = (
-    "data/processed/user_behavior_clean.parquet"
+REQUIRED_COLUMNS = (
+    "time",
+    "user_id",
+    "item_id",
+    "category_id",
+    "behavior_name",
+    "behavior_date",
 )
 
-OUTPUT_DIR = (
-    "data/features"
-)
+VALID_BEHAVIORS = ("pv", "fav", "cart", "buy")
 
-# Output files
-USER_FEATURES_FILE = (
-    rf"{OUTPUT_DIR}\user_features.parquet"
-)
+OUTPUT_FILENAMES = {
+    "user_basic": "user_features.parquet",
+    "user_activity": "user_activity_features.parquet",
+    "user_sequence": "user_sequence_features.parquet",
+    "item_behavior": "item_behavior_features.parquet",
+}
 
-USER_ACTIVITY_FEATURES_FILE = (
-    rf"{OUTPUT_DIR}\user_activity_features.parquet"
-)
-
-USER_SEQUENCE_FEATURES_FILE = (
-    rf"{OUTPUT_DIR}\user_sequence_features.parquet"
-)
-
-ITEM_BEHAVIOR_FEATURES_FILE = (
-    rf"{OUTPUT_DIR}\item_behavior_features.parquet"
-)
-
-
-# ============================================================
-# Temporal Split Definition
-# ============================================================
-
-TIME_SPLITS = [
-    {
-        "dataset_split": "train",
-        "history_start": "2025-11-18",
-        "history_end": "2025-12-07",
-        "label_date": "2025-12-08"
-    },
-    {
-        "dataset_split": "validation",
-        "history_start": "2025-12-09",
-        "history_end": "2025-12-14",
-        "label_date": "2025-12-15"
-    },
-    {
-        "dataset_split": "test",
-        "history_start": "2025-12-16",
-        "history_end": "2025-12-17",
-        "label_date": "2025-12-18"
-    }
+USER_SEQUENCE_COLUMNS = [
+    "dataset_split",
+    "user_id",
+    "item_id",
+    "history_start",
+    "history_end",
+    "label_date",
+    "last_behavior_type",
+    "last_behavior_hour",
+    "last_behavior_days_ago",
+    "last_10_behavior_sequence",
 ]
 
 
-# ============================================================
-# 1. User Basic Behavior Features
-# ============================================================
+def _validate_windows(
+    windows: Iterable[HistoryWindow],
+) -> tuple[HistoryWindow, ...]:
+    """Validate feature history windows.
 
-def calculate_user_basic_features(
-        df,
-        dataset_split,
-        history_start,
-        history_end,
-        label_date
-):
-    """
-    Calculate user-level historical behavior features
-    within a specified time window.
+    Args:
+        windows: Candidate history windows and excluded label dates.
 
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        Clean user behavior dataset.
-
-    dataset_split : str
-        train / validation / test.
-
-    history_start : str
-        Start date of historical behavior window.
-
-    history_end : str
-        End date of historical behavior window.
-
-    label_date : str
-        Prediction date.
-
-    Returns
-    -------
-    pandas.DataFrame
-        User basic behavior features.
+    Returns:
+        Validated windows as an immutable tuple.
     """
 
-    # Filter historical window only
-    mask = (
-        (df["behavior_date"] >= history_start)
-        &
-        (df["behavior_date"] <= history_end)
-    )
+    normalized = tuple(windows)
+    if not normalized:
+        raise ValueError("At least one history window is required.")
+    names = [window.dataset_split for window in normalized]
+    if len(names) != len(set(names)):
+        raise ValueError("dataset_split values must be unique.")
 
-    history_df = df.loc[mask].copy()
-
-    # Aggregate user behaviors
-    result = (
-        history_df
-        .groupby("user_id")
-        .agg(
-            event_count=(
-                "behavior_name",
-                "count"
-            ),
-            pv_count=(
-                "behavior_name",
-                lambda x: (x == "pv").sum()
-            ),
-            fav_count=(
-                "behavior_name",
-                lambda x: (x == "fav").sum()
-            ),
-            cart_count=(
-                "behavior_name",
-                lambda x: (x == "cart").sum()
-            ),
-            buy_count=(
-                "behavior_name",
-                lambda x: (x == "buy").sum()
+    for window in normalized:
+        start = pd.Timestamp(window.history_start)
+        end = pd.Timestamp(window.history_end)
+        label = pd.Timestamp(window.label_date)
+        if not start <= end < label:
+            raise ValueError(
+                f"Invalid window {window.dataset_split!r}: expected "
+                "history_start <= history_end < label_date."
             )
-        )
+    return normalized
+
+
+def _prepare_clean_data(clean_data: pd.DataFrame) -> pd.DataFrame:
+    """Validate clean input and create deterministic time fields.
+
+    Args:
+        clean_data: Stage-one clean user behavior rows.
+
+    Returns:
+        Required input columns plus parsed event time, normalized event date,
+        and stable source-row order.
+    """
+
+    missing = sorted(set(REQUIRED_COLUMNS) - set(clean_data.columns))
+    if missing:
+        raise ValueError(f"Clean data is missing columns: {missing}")
+
+    frame = clean_data.loc[:, REQUIRED_COLUMNS].copy()
+    event_time = pd.to_datetime(
+        frame["time"],
+        format="%Y-%m-%d %H",
+        errors="coerce",
+        exact=True,
+    )
+    behavior_date = pd.to_datetime(
+        frame["behavior_date"],
+        errors="coerce",
+    ).dt.normalize()
+    if event_time.isna().any() or behavior_date.isna().any():
+        raise ValueError("Clean data contains invalid time fields.")
+    if not behavior_date.eq(event_time.dt.normalize()).all():
+        raise ValueError("behavior_date is inconsistent with time.")
+    if not frame["behavior_name"].isin(VALID_BEHAVIORS).all():
+        raise ValueError("Clean data contains an unsupported behavior_name.")
+    if frame[["user_id", "item_id", "category_id"]].isna().any().any():
+        raise ValueError("Clean data contains missing dimension identifiers.")
+
+    frame["event_time"] = event_time
+    frame["event_date"] = event_time.dt.normalize()
+    frame["source_order"] = np.arange(len(frame), dtype="int64")
+    return frame
+
+
+def select_feature_history(
+    clean_data: pd.DataFrame,
+    window: HistoryWindow,
+) -> pd.DataFrame:
+    """Select one inclusive history window and exclude its label date.
+
+    Args:
+        clean_data: Prepared clean rows containing ``event_time``.
+        window: History boundaries and excluded label date.
+
+    Returns:
+        A copy containing only events from ``history_start`` through
+        ``history_end``. Label-date and later rows are excluded.
+    """
+
+    start = pd.Timestamp(window.history_start)
+    end_exclusive = pd.Timestamp(window.history_end) + pd.Timedelta(days=1)
+    label = pd.Timestamp(window.label_date)
+    mask = (
+        clean_data["event_time"].ge(start)
+        & clean_data["event_time"].lt(end_exclusive)
+        & clean_data["event_time"].lt(label)
+    )
+    return clean_data.loc[mask].copy()
+
+
+def _behavior_counts(history: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    """Count the four behavior types for a requested grain.
+
+    Args:
+        history: Rows from one validated history window.
+        keys: Columns defining the output grain.
+
+    Returns:
+        One row per key with integer ``pv``, ``fav``, ``cart``, and ``buy``
+        count columns.
+    """
+
+    counts = (
+        history.groupby(keys + ["behavior_name"], observed=True, sort=False)
+        .size()
+        .unstack("behavior_name", fill_value=0)
+        .reindex(columns=VALID_BEHAVIORS, fill_value=0)
         .reset_index()
     )
+    for behavior in VALID_BEHAVIORS:
+        counts[behavior] = counts[behavior].astype("int64")
+    return counts
 
-    # Purchase conversion rate
-    result["buy_conversion_rate"] = (
-        result["buy_count"]
-        /
-        result["event_count"]
-    ).round(4)
 
-    # Add temporal metadata
-    result.insert(
-        0,
-        "dataset_split",
-        dataset_split
+def _add_window_metadata(
+    table: pd.DataFrame,
+    window: HistoryWindow,
+    key_count: int,
+) -> pd.DataFrame:
+    """Attach fixed split metadata immediately after grain keys.
+
+    Args:
+        table: Feature rows for one history window.
+        window: Window metadata to attach.
+        key_count: Number of grain-key columns following ``dataset_split``.
+
+    Returns:
+        Feature rows with split, history boundaries, and label-date metadata.
+    """
+
+    table.insert(0, "dataset_split", window.dataset_split)
+    insert_at = key_count + 1
+    table.insert(insert_at, "history_start", pd.Timestamp(window.history_start))
+    table.insert(insert_at + 1, "history_end", pd.Timestamp(window.history_end))
+    table.insert(insert_at + 2, "label_date", pd.Timestamp(window.label_date))
+    return table
+
+
+def build_user_basic_features(
+    history: pd.DataFrame,
+    window: HistoryWindow,
+) -> pd.DataFrame:
+    """Build user basic behavior counts for one history window.
+
+    Args:
+        history: Events already restricted to ``window``.
+        window: Metadata written to every output row.
+
+    Returns:
+        One row per user containing total and four behavior counts. Conversion
+        fields are deliberately excluded for the later conversion-chain table.
+    """
+
+    total = (
+        history.groupby("user_id", observed=True, sort=False)
+        .size()
+        .rename("event_count")
+        .reset_index()
     )
-
-    result.insert(
-        2,
-        "history_start",
-        history_start
+    counts = _behavior_counts(history, ["user_id"]).rename(
+        columns={behavior: f"{behavior}_count" for behavior in VALID_BEHAVIORS}
     )
-
-    result.insert(
-        3,
-        "history_end",
-        history_end
-    )
-
-    result.insert(
-        4,
-        "label_date",
-        label_date
-    )
-
-    return result
+    table = total.merge(counts, on="user_id", validate="one_to_one")
+    return _add_window_metadata(table, window, key_count=1)
 
 
-# ============================================================
-# 2. User Activity Features
-# ============================================================
+def build_user_activity_features(
+    history: pd.DataFrame,
+    window: HistoryWindow,
+) -> pd.DataFrame:
+    """Build continuous user activity features for one history window.
 
-def calculate_user_activity_features(
-        df,
-        dataset_split,
-        history_start,
-        history_end,
-        label_date
-):
+    Args:
+        history: Events already restricted to ``window``.
+        window: Metadata written to every output row.
 
-    print("\n" + "-" * 60)
-    print(f"Processing {dataset_split}")
-    print("-" * 60)
-
-    # --------------------------------------------------------
-    # Convert dates
-    # --------------------------------------------------------
-
-    history_start_dt = pd.Timestamp(history_start)
-    history_end_dt = pd.Timestamp(history_end)
-    label_date_dt = pd.Timestamp(label_date)
-
-    # --------------------------------------------------------
-    # Calculate window days
-    # --------------------------------------------------------
+    Returns:
+        One row per user with length-normalized activity, recency, interaction
+        breadth, and per-day behavior counts. Activity level is added after all
+        windows are combined so train-only thresholds can be used.
+    """
 
     window_days = (
-        history_end_dt - history_start_dt
+        pd.Timestamp(window.history_end) - pd.Timestamp(window.history_start)
     ).days + 1
-
-    print(f"History: {history_start} -> {history_end}")
-    print(f"Label date: {label_date}")
-    print(f"Window days: {window_days}")
-
-    # --------------------------------------------------------
-    # Filter history only
-    #
-    # IMPORTANT:
-    # No data from label_date is used.
-    # --------------------------------------------------------
-
-    mask = (
-        (df["behavior_date"] >= history_start_dt)
-        &
-        (df["behavior_date"] < history_end_dt + pd.Timedelta(days=1))
-    )
-
-    history_df = df.loc[mask].copy()
-
-    print(f"History events: {len(history_df):,}")
-
-    # --------------------------------------------------------
-    # Convert actual behavior timestamp
-    # --------------------------------------------------------
-
-    history_df["behavior_time"] = pd.to_datetime(
-        history_df["time"],
-        errors="coerce"
-    )
-
-    # Remove invalid timestamps
-    history_df = history_df.dropna(
-        subset=["behavior_time"]
-    )
-
-    # --------------------------------------------------------
-    # Create event date
-    # --------------------------------------------------------
-
-    history_df["event_date"] = (
-        history_df["behavior_time"]
-        .dt.normalize()
-    )
-
-    # --------------------------------------------------------
-    # Aggregate user-level activity
-    # --------------------------------------------------------
-
-    result = (
-        history_df
-        .groupby("user_id")
+    base = (
+        history.groupby("user_id", observed=True, sort=False)
         .agg(
-
-            # Total number of behaviors
-            event_count=(
-                "behavior_name",
-                "count"
-            ),
-
-            # Number of unique active days
-            active_day_count=(
-                "event_date",
-                "nunique"
-            ),
-
-            # Last behavior timestamp
-            last_event_time=(
-                "behavior_time",
-                "max"
-            ),
-
-            # Unique items
-            unique_item_count=(
-                "item_id",
-                "nunique"
-            ),
-
-            # Unique categories
-            unique_category_count=(
-                "category_id",
-                "nunique"
-            ),
-
-            # PV
-            pv_count=(
-                "behavior_name",
-                lambda x: (x == "pv").sum()
-            ),
-
-            # Favorite
-            fav_count=(
-                "behavior_name",
-                lambda x: (x == "fav").sum()
-            ),
-
-            # Cart
-            cart_count=(
-                "behavior_name",
-                lambda x: (x == "cart").sum()
-            ),
-
-            # Purchase
-            buy_count=(
-                "behavior_name",
-                lambda x: (x == "buy").sum()
-            )
+            event_count=("user_id", "size"),
+            active_day_count=("event_date", "nunique"),
+            last_event_time=("event_time", "max"),
+            unique_item_count=("item_id", "nunique"),
+            unique_category_count=("category_id", "nunique"),
         )
         .reset_index()
     )
-
-    # ========================================================
-    # Continuous Activity Features
-    # ========================================================
-
-    # --------------------------------------------------------
-    # Active day ratio
-    # --------------------------------------------------------
-
-    result["active_day_ratio"] = (
-        result["active_day_count"]
-        / window_days
+    counts = _behavior_counts(history, ["user_id"])
+    table = base.merge(counts, on="user_id", validate="one_to_one")
+    table["window_days"] = window_days
+    table["active_day_ratio"] = table["active_day_count"] / window_days
+    table["avg_daily_event_count"] = table["event_count"] / window_days
+    table["avg_active_day_event_count"] = (
+        table["event_count"] / table["active_day_count"]
     )
+    table["days_since_last_event"] = (
+        pd.Timestamp(window.label_date) - table["last_event_time"]
+    ).dt.total_seconds() / 86_400
+    for behavior in VALID_BEHAVIORS:
+        table[f"{behavior}_count_per_day"] = table[behavior] / window_days
 
-    # --------------------------------------------------------
-    # Average daily event count
-    # --------------------------------------------------------
-
-    result["avg_daily_event_count"] = (
-        result["event_count"]
-        / window_days
-    )
-
-    # --------------------------------------------------------
-    # Average events on active days
-    # --------------------------------------------------------
-
-    result["avg_active_day_event_count"] = (
-        result["event_count"]
-        / result["active_day_count"]
-    )
-
-    result["avg_active_day_event_count"] = (
-        result["avg_active_day_event_count"]
-        .replace([np.inf, -np.inf], np.nan)
-        .fillna(0)
-    )
-
-    # --------------------------------------------------------
-    # Days since last event
-    # --------------------------------------------------------
-
-    result["days_since_last_event"] = (
-        (
-            label_date_dt
-            - result["last_event_time"]
-        )
-        .dt.total_seconds()
-        / (24 * 60 * 60)
-    )
-
-    # --------------------------------------------------------
-    # Behavior counts per day
-    # --------------------------------------------------------
-
-    result["pv_count_per_day"] = (
-        result["pv_count"]
-        / window_days
-    )
-
-    result["fav_count_per_day"] = (
-        result["fav_count"]
-        / window_days
-    )
-
-    result["cart_count_per_day"] = (
-        result["cart_count"]
-        / window_days
-    )
-
-    result["buy_count_per_day"] = (
-        result["buy_count"]
-        / window_days
-    )
-
-    # --------------------------------------------------------
-    # Round continuous features
-    # --------------------------------------------------------
-
-    continuous_columns = [
+    table = table.drop(columns=["last_event_time", *VALID_BEHAVIORS])
+    numeric_columns = [
         "active_day_ratio",
         "avg_daily_event_count",
         "avg_active_day_event_count",
         "days_since_last_event",
-        "pv_count_per_day",
-        "fav_count_per_day",
-        "cart_count_per_day",
-        "buy_count_per_day"
+        *[f"{behavior}_count_per_day" for behavior in VALID_BEHAVIORS],
     ]
-
-    result[continuous_columns] = (
-        result[continuous_columns]
-        .round(4)
-    )
-
-    # ========================================================
-    # Add Temporal Metadata
-    # ========================================================
-
-    result.insert(
-        0,
+    table[numeric_columns] = table[numeric_columns].round(4)
+    table = _add_window_metadata(table, window, key_count=1)
+    ordered_columns = [
         "dataset_split",
-        dataset_split
-    )
-
-    result.insert(
-        2,
+        "user_id",
         "history_start",
-        history_start
-    )
-
-    result.insert(
-        3,
         "history_end",
-        history_end
-    )
-
-    result.insert(
-        4,
         "label_date",
-        label_date
-    )
-
-    result.insert(
-        5,
         "window_days",
-        window_days
-    )
-
-    # ========================================================
-    # Reorder columns
-    # ========================================================
-
-    result = result[
-        [
-            "dataset_split",
-            "user_id",
-            "history_start",
-            "history_end",
-            "label_date",
-            "window_days",
-            "event_count",
-            "active_day_count",
-            "active_day_ratio",
-            "avg_daily_event_count",
-            "avg_active_day_event_count",
-            "days_since_last_event",
-            "unique_item_count",
-            "unique_category_count",
-            "pv_count_per_day",
-            "fav_count_per_day",
-            "cart_count_per_day",
-            "buy_count_per_day"
-        ]
+        "event_count",
+        "active_day_count",
+        "active_day_ratio",
+        "avg_daily_event_count",
+        "avg_active_day_event_count",
+        "days_since_last_event",
+        "unique_item_count",
+        "unique_category_count",
+        *[f"{behavior}_count_per_day" for behavior in VALID_BEHAVIORS],
     ]
-
-    print(f"Users: {len(result):,}")
-
-    return result
+    return table.loc[:, ordered_columns]
 
 
-# ============================================================
-# 3. User-Item Sequence Features
-# ============================================================
+def build_user_sequence_features(
+    history: pd.DataFrame,
+    window: HistoryWindow,
+) -> pd.DataFrame:
+    """Build deterministic user-item behavior sequence features.
 
-def calculate_user_item_sequence_features(
-        df,
-        dataset_split,
-        history_start,
-        history_end,
-        label_date
-):
+    Args:
+        history: Events already restricted to ``window``.
+        window: Metadata written to every output row.
 
-    print("\n" + "-" * 60)
-    print(f"Processing: {dataset_split}")
-    print("-" * 60)
+    Returns:
+        One row per user-item pair with its latest behavior and last ten
+        behavior names. Input row order resolves events tied within one hour.
+        Transition and conversion fields are excluded for the later dedicated
+        conversion-chain table.
+    """
 
-    # --------------------------------------------------------
-    # Convert dates
-    # --------------------------------------------------------
+    if history.empty:
+        return pd.DataFrame(columns=USER_SEQUENCE_COLUMNS)
 
-    history_start_dt = pd.Timestamp(history_start)
-    history_end_dt = pd.Timestamp(history_end)
-    label_date_dt = pd.Timestamp(label_date)
-
-    # --------------------------------------------------------
-    # Filter history window ONLY
-    #
-    # IMPORTANT:
-    # history_end is inclusive.
-    # label_date and later data are excluded.
-    # --------------------------------------------------------
-
-    mask = (
-        (df["behavior_time"] >= history_start_dt)
-        &
-        (df["behavior_time"] < label_date_dt)
+    keys = ["user_id", "item_id"]
+    ordered = history.sort_values(
+        keys + ["event_time", "source_order"],
+        kind="mergesort",
     )
-
-    history_df = df.loc[mask].copy()
-
-    print(
-        "History events:",
-        f"{len(history_df):,}"
+    latest = ordered.groupby(keys, observed=True, sort=False).tail(1).copy()
+    latest = latest.loc[:, keys + ["behavior_name", "event_time"]].rename(
+        columns={
+            "behavior_name": "last_behavior_type",
+            "event_time": "last_behavior_time",
+        }
     )
-
-    if history_df.empty:
-        print("No history data found.")
-        return pd.DataFrame()
-
-    # --------------------------------------------------------
-    # Sort chronologically
-    # --------------------------------------------------------
-
-    history_df = history_df.sort_values(
-        ["user_id", "item_id", "behavior_time"]
+    latest["last_behavior_hour"] = latest["last_behavior_time"].dt.hour.astype(
+        "int8"
     )
+    latest["last_behavior_days_ago"] = (
+        pd.Timestamp(window.label_date) - latest["last_behavior_time"]
+    ).dt.total_seconds().div(86_400).round(4)
 
-    # ========================================================
-    # Create User-Item Groups
-    # ========================================================
-
-    # --------------------------------------------------------
-    # Last behavior
-    # --------------------------------------------------------
-
-    last_event = (
-        history_df
-        .groupby(
-            ["user_id", "item_id"],
-            sort=False
-        )
-        .tail(1)
-        [
-            [
-                "user_id",
-                "item_id",
-                "behavior_name",
-                "behavior_time"
-            ]
-        ]
-        .rename(
-            columns={
-                "behavior_name": "last_behavior_type",
-                "behavior_time": "last_behavior_time"
-            }
-        )
+    recent = ordered.groupby(keys, observed=True, sort=False).tail(10)
+    sequences = (
+        recent.groupby(keys, observed=True, sort=False)["behavior_name"]
+        .agg("→".join)
+        .rename("last_10_behavior_sequence")
+        .reset_index()
     )
-
-    # --------------------------------------------------------
-    # Last behavior hour
-    # --------------------------------------------------------
-
-    last_event["last_behavior_hour"] = (
-        last_event["last_behavior_time"].dt.hour
+    table = latest.drop(columns="last_behavior_time").merge(
+        sequences,
+        on=keys,
+        validate="one_to_one",
     )
+    table = _add_window_metadata(table, window, key_count=2)
+    return table.loc[:, USER_SEQUENCE_COLUMNS]
 
-    # --------------------------------------------------------
-    # Days since last behavior
-    # --------------------------------------------------------
 
-    last_event["last_behavior_days_ago"] = (
-        (
-            label_date_dt
-            - last_event["last_behavior_time"]
-        )
-        .dt.total_seconds()
-        / (24 * 60 * 60)
-    ).round(4)
+def build_item_behavior_features(
+    history: pd.DataFrame,
+    window: HistoryWindow,
+) -> pd.DataFrame:
+    """Build item behavior counts for one history window.
 
-    # ========================================================
-    # Last 10 Behavior Sequence
-    # ========================================================
+    Args:
+        history: Events already restricted to ``window``.
+        window: Metadata written to every output row.
 
-    # --------------------------------------------------------
-    # Keep only the latest 10 behaviors
-    # --------------------------------------------------------
+    Returns:
+        One row per item with category, behavior counts, user breadth, buyer
+        count, and active days. Heat and conversion fields are deliberately
+        excluded for their later dedicated feature tables.
+    """
 
-    last_10 = (
-        history_df
-        .groupby(
-            ["user_id", "item_id"],
-            sort=False
-        )
-        .tail(10)
-    )
+    category_counts = history.groupby("item_id", observed=True)[
+        "category_id"
+    ].nunique()
+    if category_counts.gt(1).any():
+        raise ValueError("An item_id maps to multiple category_id values.")
 
-    # --------------------------------------------------------
-    # Create sequence
-    # --------------------------------------------------------
-
-    sequence_features = (
-        last_10
-        .groupby(
-            ["user_id", "item_id"],
-            sort=False
-        )["behavior_name"]
-        .agg(lambda x: "→".join(x))
-        .reset_index(
-            name="last_10_behavior_sequence"
-        )
-    )
-
-    # ========================================================
-    # Behavior Transition Features
-    # ========================================================
-
-    # --------------------------------------------------------
-    # Create previous behavior
-    # --------------------------------------------------------
-
-    history_df["previous_behavior"] = (
-        history_df
-        .groupby(
-            ["user_id", "item_id"],
-            sort=False
-        )["behavior_name"]
-        .shift(1)
-    )
-
-    # --------------------------------------------------------
-    # Create transition labels
-    # --------------------------------------------------------
-
-    history_df["transition"] = (
-        history_df["previous_behavior"]
-        + "_to_"
-        + history_df["behavior_name"]
-    )
-
-    # --------------------------------------------------------
-    # Count selected transitions
-    # --------------------------------------------------------
-
-    transition_counts = (
-        history_df
-        .groupby(
-            [
-                "user_id",
-                "item_id",
-                "transition"
-            ]
-        )
-        .size()
-        .unstack(
-            fill_value=0
+    base = (
+        history.groupby("item_id", observed=True, sort=False)
+        .agg(
+            category_id=("category_id", "first"),
+            item_total_count=("item_id", "size"),
+            item_unique_user_count=("user_id", "nunique"),
+            item_active_day_count=("event_date", "nunique"),
         )
         .reset_index()
     )
-
-    # --------------------------------------------------------
-    # Make sure all required transition columns exist
-    # --------------------------------------------------------
-
-    required_transitions = [
-        "pv_to_cart",
-        "cart_to_buy",
-        "pv_to_buy",
-        "fav_to_buy"
-    ]
-
-    for transition in required_transitions:
-        if transition not in transition_counts.columns:
-            transition_counts[transition] = 0
-
-    # --------------------------------------------------------
-    # Keep only required transition features
-    # --------------------------------------------------------
-
-    transition_counts = transition_counts[
-        [
-            "user_id",
-            "item_id",
-            "pv_to_cart",
-            "cart_to_buy",
-            "pv_to_buy",
-            "fav_to_buy"
-        ]
-    ]
-
-    # --------------------------------------------------------
-    # Rename transition columns
-    # --------------------------------------------------------
-
-    transition_counts = transition_counts.rename(
-        columns={
-            "pv_to_cart": "pv_to_cart_count",
-            "cart_to_buy": "cart_to_buy_count",
-            "pv_to_buy": "pv_to_buy_count",
-            "fav_to_buy": "fav_to_buy_count"
-        }
+    counts = _behavior_counts(history, ["item_id"]).rename(
+        columns={behavior: f"item_{behavior}_count" for behavior in VALID_BEHAVIORS}
     )
-
-    # ========================================================
-    # Combine Features
-    # ========================================================
-
-    result = (
-        last_event[
-            [
-                "user_id",
-                "item_id",
-                "last_behavior_type",
-                "last_behavior_hour",
-                "last_behavior_days_ago"
-            ]
-        ]
-        .merge(
-            sequence_features,
-            on=["user_id", "item_id"],
-            how="left"
-        )
-        .merge(
-            transition_counts,
-            on=["user_id", "item_id"],
-            how="left"
-        )
-    )
-
-    # --------------------------------------------------------
-    # Fill missing transition counts
-    # --------------------------------------------------------
-
-    transition_columns = [
-        "pv_to_cart_count",
-        "cart_to_buy_count",
-        "pv_to_buy_count",
-        "fav_to_buy_count"
-    ]
-
-    result[transition_columns] = (
-        result[transition_columns]
-        .fillna(0)
-        .astype("int64")
-    )
-
-    # ========================================================
-    # Add Temporal Metadata
-    # ========================================================
-
-    result.insert(
-        0,
-        "dataset_split",
-        dataset_split
-    )
-
-    result.insert(
-        3,
-        "history_start",
-        history_start
-    )
-
-    result.insert(
-        4,
-        "history_end",
-        history_end
-    )
-
-    result.insert(
-        5,
-        "label_date",
-        label_date
-    )
-
-    # ========================================================
-    # Reorder Columns
-    # ========================================================
-
-    result = result[
-        [
-            "dataset_split",
-            "user_id",
-            "item_id",
-            "history_start",
-            "history_end",
-            "label_date",
-            "last_behavior_type",
-            "last_behavior_hour",
-            "last_behavior_days_ago",
-            "last_10_behavior_sequence",
-            "pv_to_cart_count",
-            "cart_to_buy_count",
-            "pv_to_buy_count",
-            "fav_to_buy_count"
-        ]
-    ]
-
-    print(
-        "User-item pairs:",
-        f"{len(result):,}"
-    )
-
-    return result
-
-
-# ============================================================
-# 4. Item Behavior Features
-# ============================================================
-
-def calculate_item_behavior_features(
-        df,
-        dataset_split,
-        history_start,
-        history_end,
-        label_date
-):
-
-    print("\n" + "=" * 60)
-    print(f"Processing: {dataset_split}")
-    print("=" * 60)
-
-    history_start_dt = pd.Timestamp(history_start)
-    label_date_dt = pd.Timestamp(label_date)
-
-    # --------------------------------------------------------
-    # Filter history window
-    # --------------------------------------------------------
-
-    mask = (
-        (df["behavior_time"] >= history_start_dt)
-        &
-        (df["behavior_time"] < label_date_dt)
-    )
-
-    history_df = df.loc[
-        mask,
-        [
-            "user_id",
-            "item_id",
-            "category_id",
-            "behavior_name",
-            "behavior_time"
-        ]
-    ].copy()
-
-    print(
-        "History events:",
-        f"{len(history_df):,}"
-    )
-
-    if history_df.empty:
-        return pd.DataFrame()
-
-    # --------------------------------------------------------
-    # Create event date
-    # --------------------------------------------------------
-
-    history_df["event_date"] = (
-        history_df["behavior_time"]
-        .dt.date
-    )
-
-    # ========================================================
-    # Basic Item Counts
-    # ========================================================
-
-    print("Calculating item behavior counts...")
-
-    # Total behavior count
-    item_total = (
-        history_df
-        .groupby("item_id")
-        .size()
-        .rename("item_total_count")
-    )
-
-    # Behavior type counts
-    behavior_counts = pd.crosstab(
-        history_df["item_id"],
-        history_df["behavior_name"]
-    )
-
-    # Make sure all behavior columns exist
-    for behavior in ["pv", "fav", "cart", "buy"]:
-        if behavior not in behavior_counts.columns:
-            behavior_counts[behavior] = 0
-
-    behavior_counts = behavior_counts[
-        ["pv", "fav", "cart", "buy"]
-    ]
-
-    behavior_counts = behavior_counts.rename(
-        columns={
-            "pv": "item_pv_count",
-            "fav": "item_fav_count",
-            "cart": "item_cart_count",
-            "buy": "item_buy_count"
-        }
-    )
-
-    # ========================================================
-    # Unique Users
-    # ========================================================
-
-    print("Calculating unique users...")
-
-    item_unique_users = (
-        history_df
-        .groupby("item_id")["user_id"]
-        .nunique()
-        .rename("item_unique_user_count")
-    )
-
-    # ========================================================
-    # Unique Buyers
-    # ========================================================
-
-    print("Calculating unique buyers...")
-
-    buy_df = history_df.loc[
-        history_df["behavior_name"] == "buy",
-        ["item_id", "user_id"]
-    ]
-
-    item_unique_buyers = (
-        buy_df
-        .groupby("item_id")["user_id"]
+    buyers = (
+        history.loc[history["behavior_name"].eq("buy")]
+        .groupby("item_id", observed=True)["user_id"]
         .nunique()
         .rename("item_unique_buyer_count")
+        .reset_index()
     )
-
-    # ========================================================
-    # Active Days
-    # ========================================================
-
-    print("Calculating active days...")
-
-    item_active_days = (
-        history_df
-        .groupby("item_id")["event_date"]
-        .nunique()
-        .rename("item_active_day_count")
+    table = base.merge(counts, on="item_id", validate="one_to_one").merge(
+        buyers,
+        on="item_id",
+        how="left",
+        validate="one_to_one",
     )
-
-    # ========================================================
-    # Category
-    # ========================================================
-
-    item_category = (
-        history_df
-        .groupby("item_id")["category_id"]
-        .first()
-        .rename("category_id")
+    table["item_unique_buyer_count"] = (
+        table["item_unique_buyer_count"].fillna(0).astype("int64")
     )
-
-    # ========================================================
-    # Combine
-    # ========================================================
-
-    result = pd.concat(
-        [
-            item_category,
-            item_total,
-            behavior_counts,
-            item_unique_users,
-            item_unique_buyers,
-            item_active_days
-        ],
-        axis=1
-    ).reset_index()
-
-    # --------------------------------------------------------
-    # Fill missing counts
-    # --------------------------------------------------------
-
-    count_columns = [
-        "item_total_count",
-        "item_pv_count",
-        "item_fav_count",
-        "item_cart_count",
-        "item_buy_count",
-        "item_unique_user_count",
-        "item_unique_buyer_count",
-        "item_active_day_count"
-    ]
-
-    result[count_columns] = (
-        result[count_columns]
-        .fillna(0)
-        .astype("int64")
-    )
-
-    # ========================================================
-    # Conversion Rates
-    # ========================================================
-
-    print("Calculating conversion rates...")
-
-    result["item_fav_to_pv_rate"] = np.where(
-        result["item_pv_count"] > 0,
-        result["item_fav_count"]
-        / result["item_pv_count"],
-        0
-    )
-
-    result["item_cart_to_pv_rate"] = np.where(
-        result["item_pv_count"] > 0,
-        result["item_cart_count"]
-        / result["item_pv_count"],
-        0
-    )
-
-    result["item_buy_to_pv_rate"] = np.where(
-        result["item_pv_count"] > 0,
-        result["item_buy_count"]
-        / result["item_pv_count"],
-        0
-    )
-
-    result[
-        [
-            "item_fav_to_pv_rate",
-            "item_cart_to_pv_rate",
-            "item_buy_to_pv_rate"
-        ]
-    ] = (
-        result[
-            [
-                "item_fav_to_pv_rate",
-                "item_cart_to_pv_rate",
-                "item_buy_to_pv_rate"
-            ]
-        ]
-        .round(4)
-    )
-
-    # ========================================================
-    # Add Temporal Metadata
-    # ========================================================
-
-    result.insert(
-        0,
+    table = _add_window_metadata(table, window, key_count=2)
+    ordered_columns = [
         "dataset_split",
-        dataset_split
-    )
-
-    result.insert(
-        3,
-        "history_start",
-        history_start
-    )
-
-    result.insert(
-        4,
-        "history_end",
-        history_end
-    )
-
-    result.insert(
-        5,
-        "label_date",
-        label_date
-    )
-
-    # ========================================================
-    # Column Order
-    # ========================================================
-
-    result = result[
-        [
-            "dataset_split",
-            "item_id",
-            "category_id",
-            "history_start",
-            "history_end",
-            "label_date",
-            "item_total_count",
-            "item_pv_count",
-            "item_fav_count",
-            "item_cart_count",
-            "item_buy_count",
-            "item_unique_user_count",
-            "item_unique_buyer_count",
-            "item_active_day_count",
-            "item_fav_to_pv_rate",
-            "item_cart_to_pv_rate",
-            "item_buy_to_pv_rate"
-        ]
-    ]
-
-    print(
-        "Items:",
-        f"{len(result):,}"
-    )
-
-    return result
-
-
-# ============================================================
-# Main Pipeline
-# ============================================================
-
-def main():
-
-    print("=" * 70)
-    print("USER / ITEM FEATURE ENGINEERING")
-    print("=" * 70)
-
-    # ========================================================
-    # Load data ONLY ONCE
-    # ========================================================
-
-    print("\nLoading data...")
-
-    df = pd.read_parquet(INPUT_FILE)
-
-    print(
-        "Data loaded:",
-        f"{len(df):,}",
-        "rows"
-    )
-
-    print(
-        "Columns:",
-        ", ".join(df.columns)
-    )
-
-    # ========================================================
-    # Check required columns
-    # ========================================================
-
-    required_columns = [
-        "time",
-        "user_id",
         "item_id",
         "category_id",
-        "behavior_name",
-        "behavior_date"
+        "history_start",
+        "history_end",
+        "label_date",
+        "item_total_count",
+        *[f"item_{behavior}_count" for behavior in VALID_BEHAVIORS],
+        "item_unique_user_count",
+        "item_unique_buyer_count",
+        "item_active_day_count",
     ]
+    return table.loc[:, ordered_columns]
 
-    missing_columns = [
-        col
-        for col in required_columns
-        if col not in df.columns
+
+def build_feature_tables(
+    clean_data: pd.DataFrame,
+    windows: Iterable[HistoryWindow] = HISTORY_WINDOWS,
+) -> dict[str, pd.DataFrame]:
+    """Build exactly the first four stage-two feature tables.
+
+    Args:
+        clean_data: Stage-one clean behavior data.
+        windows: Leakage-safe history windows. Defaults to the three fixed
+            stage-two windows.
+
+    Returns:
+        Mapping containing exactly ``user_basic``, ``user_activity``,
+        ``user_sequence``, and ``item_behavior`` tables. No labels, remaining
+        feature tables, or final wide table are created.
+    """
+
+    prepared = _prepare_clean_data(clean_data)
+    validated_windows = _validate_windows(windows)
+    builders = {
+        "user_basic": build_user_basic_features,
+        "user_activity": build_user_activity_features,
+        "user_sequence": build_user_sequence_features,
+        "item_behavior": build_item_behavior_features,
+    }
+    parts: dict[str, list[pd.DataFrame]] = {name: [] for name in builders}
+
+    for window in validated_windows:
+        history = select_feature_history(prepared, window)
+        for name, builder in builders.items():
+            parts[name].append(builder(history, window))
+
+    tables = {
+        name: pd.concat(window_parts, ignore_index=True)
+        for name, window_parts in parts.items()
+    }
+    activity = tables["user_activity"]
+    train_values = activity.loc[
+        activity["dataset_split"].eq("train"),
+        "avg_daily_event_count",
     ]
-
-    if missing_columns:
-        raise ValueError(
-            "Missing required columns: "
-            + ", ".join(missing_columns)
-        )
-
-    # ========================================================
-    # Prepare date / timestamp columns ONLY ONCE
-    # ========================================================
-
-    print("\nConverting dates and timestamps...")
-
-    df["behavior_date"] = pd.to_datetime(
-        df["behavior_date"],
-        errors="coerce"
-    )
-
-    df["behavior_time"] = pd.to_datetime(
-        df["time"],
-        errors="coerce"
-    )
-
-    # Remove invalid rows
-    df = df.dropna(
-        subset=[
-            "behavior_date",
-            "behavior_time"
-        ]
-    )
-
-    print(
-        "Valid rows after date conversion:",
-        f"{len(df):,}"
-    )
-
-    # ========================================================
-    # 1. USER BASIC FEATURES
-    # ========================================================
-
-    print("\n")
-    print("#" * 70)
-    print("1. USER BASIC BEHAVIOR FEATURES")
-    print("#" * 70)
-
-    user_basic_list = []
-
-    for split in TIME_SPLITS:
-
-        features = calculate_user_basic_features(
-            df=df,
-            dataset_split=split["dataset_split"],
-            history_start=split["history_start"],
-            history_end=split["history_end"],
-            label_date=split["label_date"]
-        )
-
-        user_basic_list.append(features)
-
-    user_basic_features = pd.concat(
-        user_basic_list,
-        ignore_index=True
-    )
-
-    user_basic_features.to_parquet(
-        USER_FEATURES_FILE,
-        index=False
-    )
-
-    print(
-        "\nUser basic features saved:",
-        USER_FEATURES_FILE
-    )
-
-    print(
-        "Shape:",
-        user_basic_features.shape
-    )
-
-
-    # ========================================================
-    # 2. USER ACTIVITY FEATURES
-    # ========================================================
-
-    print("\n")
-    print("#" * 70)
-    print("2. USER ACTIVITY FEATURES")
-    print("#" * 70)
-
-    user_activity_list = []
-
-    for split in TIME_SPLITS:
-
-        features = calculate_user_activity_features(
-            df=df,
-            dataset_split=split["dataset_split"],
-            history_start=split["history_start"],
-            history_end=split["history_end"],
-            label_date=split["label_date"]
-        )
-
-        user_activity_list.append(features)
-
-    user_activity_features = pd.concat(
-        user_activity_list,
-        ignore_index=True
-    )
-
-    # ========================================================
-    # Calculate Activity Level
-    #
-    # IMPORTANT:
-    # P25 / P75 are calculated ONLY from TRAIN.
-    # ========================================================
-
-    train_values = user_activity_features.loc[
-        user_activity_features["dataset_split"] == "train",
-        "avg_daily_event_count"
-    ]
-
+    if train_values.empty:
+        raise ValueError("Train rows are required to define activity thresholds.")
     p25 = train_values.quantile(0.25)
     p75 = train_values.quantile(0.75)
-
-    print("\n" + "=" * 60)
-    print("ACTIVITY LEVEL THRESHOLDS")
-    print("=" * 60)
-
-    print(
-        "Training P25:",
-        round(p25, 4)
-    )
-
-    print(
-        "Training P75:",
-        round(p75, 4)
-    )
-
-    # --------------------------------------------------------
-    # Apply fixed train thresholds to ALL splits
-    # --------------------------------------------------------
-
-    user_activity_features["activity_level"] = np.select(
+    activity["activity_level"] = np.select(
         [
-            user_activity_features[
-                "avg_daily_event_count"
-            ] <= p25,
-
-            user_activity_features[
-                "avg_daily_event_count"
-            ] <= p75
+            activity["avg_daily_event_count"].le(p25),
+            activity["avg_daily_event_count"].le(p75),
         ],
-        [
-            "low",
-            "medium"
-        ],
-        default="high"
+        ["low", "medium"],
+        default="high",
     )
-
-    user_activity_features.to_parquet(
-        USER_ACTIVITY_FEATURES_FILE,
-        index=False
-    )
-
-    print(
-        "\nUser activity features saved:",
-        USER_ACTIVITY_FEATURES_FILE
-    )
-
-    print(
-        "Shape:",
-        user_activity_features.shape
-    )
+    return tables
 
 
-    # ========================================================
-    # 3. USER-ITEM SEQUENCE FEATURES
-    # ========================================================
+def generate_feature_tables(
+    input_parquet: str | Path,
+    output_directory: str | Path,
+    windows: Iterable[HistoryWindow] = HISTORY_WINDOWS,
+) -> dict[str, Path]:
+    """Read clean Parquet and atomically write exactly four feature tables.
 
-    print("\n")
-    print("#" * 70)
-    print("3. USER-ITEM SEQUENCE FEATURES")
-    print("#" * 70)
+    Args:
+        input_parquet: Stage-one clean Parquet path.
+        output_directory: Directory receiving four feature Parquet files.
+        windows: History windows passed to :func:`build_feature_tables`.
 
-    user_sequence_list = []
+    Returns:
+        Mapping from logical table name to its resolved output path.
+    """
 
-    for split in TIME_SPLITS:
+    source = Path(input_parquet).expanduser().resolve()
+    destination = Path(output_directory).expanduser().resolve()
+    if not source.is_file():
+        raise FileNotFoundError(f"Clean Parquet does not exist: {source}")
 
-        features = calculate_user_item_sequence_features(
-            df=df,
-            dataset_split=split["dataset_split"],
-            history_start=split["history_start"],
-            history_end=split["history_end"],
-            label_date=split["label_date"]
-        )
+    clean_data = pd.read_parquet(source, columns=list(REQUIRED_COLUMNS))
+    tables = build_feature_tables(clean_data, windows)
+    destination.mkdir(parents=True, exist_ok=True)
+    output_paths: dict[str, Path] = {}
+    temporary_paths: list[Path] = []
 
-        if not features.empty:
-            user_sequence_list.append(features)
+    try:
+        for name, table in tables.items():
+            target = destination / OUTPUT_FILENAMES[name]
+            temporary = target.with_suffix(".parquet.tmp")
+            temporary_paths.append(temporary)
+            table.to_parquet(temporary, index=False)
+            temporary.replace(target)
+            output_paths[name] = target
+    finally:
+        for temporary in temporary_paths:
+            temporary.unlink(missing_ok=True)
 
-    if not user_sequence_list:
-        raise ValueError(
-            "No user-item sequence features were generated."
-        )
-
-    user_sequence_features = pd.concat(
-        user_sequence_list,
-        ignore_index=True
-    )
-
-    user_sequence_features.to_parquet(
-        USER_SEQUENCE_FEATURES_FILE,
-        index=False
-    )
-
-    print(
-        "\nUser sequence features saved:",
-        USER_SEQUENCE_FEATURES_FILE
-    )
-
-    print(
-        "Shape:",
-        user_sequence_features.shape
-    )
-
-
-    # ========================================================
-    # 4. ITEM BEHAVIOR FEATURES
-    # ========================================================
-
-    print("\n")
-    print("#" * 70)
-    print("4. ITEM BEHAVIOR FEATURES")
-    print("#" * 70)
-
-    item_behavior_list = []
-
-    for split in TIME_SPLITS:
-
-        features = calculate_item_behavior_features(
-            df=df,
-            dataset_split=split["dataset_split"],
-            history_start=split["history_start"],
-            history_end=split["history_end"],
-            label_date=split["label_date"]
-        )
-
-        if not features.empty:
-            item_behavior_list.append(features)
-
-    if not item_behavior_list:
-        raise ValueError(
-            "No item behavior features were generated."
-        )
-
-    item_behavior_features = pd.concat(
-        item_behavior_list,
-        ignore_index=True
-    )
-
-    # ========================================================
-    # Item Heat Level
-    # ========================================================
-
-    print("\n" + "=" * 60)
-    print("Calculating item heat level...")
-    print("=" * 60)
-
-    train_values = item_behavior_features.loc[
-        item_behavior_features["dataset_split"] == "train",
-        "item_total_count"
-    ]
-
-    p25 = train_values.quantile(0.25)
-    p75 = train_values.quantile(0.75)
-
-    print(
-        "Training P25:",
-        round(p25, 4)
-    )
-
-    print(
-        "Training P75:",
-        round(p75, 4)
-    )
-
-    item_behavior_features["item_heat_level"] = np.select(
-        [
-            item_behavior_features[
-                "item_total_count"
-            ] <= p25,
-
-            item_behavior_features[
-                "item_total_count"
-            ] <= p75
-        ],
-        [
-            "low",
-            "medium"
-        ],
-        default="high"
-    )
-
-    # ========================================================
-    # Save
-    # ========================================================
-
-    item_behavior_features.to_parquet(
-        ITEM_BEHAVIOR_FEATURES_FILE,
-        index=False
-    )
-
-    print(
-        "\nItem behavior features saved:",
-        ITEM_BEHAVIOR_FEATURES_FILE
-    )
-
-    print(
-        "Shape:",
-        item_behavior_features.shape
-    )
-
-
-    # ========================================================
-    # Final Summary
-    # ========================================================
-
-    print("\n")
-    print("=" * 70)
-    print("ALL FEATURE ENGINEERING COMPLETED")
-    print("=" * 70)
-
-    print("\nOutput files:")
-
-    print(
-        "1. User basic:",
-        USER_FEATURES_FILE
-    )
-
-    print(
-        "2. User activity:",
-        USER_ACTIVITY_FEATURES_FILE
-    )
-
-    print(
-        "3. User sequence:",
-        USER_SEQUENCE_FEATURES_FILE
-    )
-
-    print(
-        "4. Item behavior:",
-        ITEM_BEHAVIOR_FEATURES_FILE
-    )
-
-    print("\nShapes:")
-
-    print(
-        "User basic:",
-        user_basic_features.shape
-    )
-
-    print(
-        "User activity:",
-        user_activity_features.shape
-    )
-
-    print(
-        "User sequence:",
-        user_sequence_features.shape
-    )
-
-    print(
-        "Item behavior:",
-        item_behavior_features.shape
-    )
-
-    print("\nRows by split:")
-
-    print(
-        user_basic_features[
-            "dataset_split"
-        ].value_counts()
-    )
-
-    print(
-        user_activity_features[
-            "dataset_split"
-        ].value_counts()
-    )
-
-    print(
-        user_sequence_features[
-            "dataset_split"
-        ].value_counts()
-    )
-
-    print(
-        item_behavior_features[
-            "dataset_split"
-        ].value_counts()
-    )
-
-    print("\n" + "=" * 70)
-    print("DONE")
-    print("=" * 70)
-
-
-# ============================================================
-# Run
-# ============================================================
-
-if __name__ == "__main__":
-    main()
+    return output_paths

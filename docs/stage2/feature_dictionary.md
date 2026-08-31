@@ -62,82 +62,76 @@
 
 `event_count` 和四类行为计数字段适用于上述四张表，其具体粒度由所在表决定。转化率字段本阶段不落表，公式见 `feature_engineering_spec.md`。
 
-## `user_features.parquet`
+## 已完成的前四张特征表
 
-| 字段名 | 含义 |
-| ---- | ---- |
-| `dataset_split` | train / validation / test |
-| `user_id` | 用户 ID |
-| `history_start` | 历史行为窗口开始日期 |
-| `history_end` | 历史行为窗口结束日期 |
-| `label_date` | 对应的标签日期 |
-| `event_count` | 用户在 history window 内的总行为次数 |
-| `pv_count` | 浏览次数 |
-| `fav_count` | 收藏次数 |
-| `cart_count` | 加购次数 |
-| `buy_count` | 购买次数 |
-| `buy_conversion_rate` | `buy_count` / `event_count` |
+四张表共同包含 `dataset_split`、`history_start`、`history_end` 和 `label_date`。这些字段用于窗口关联和防泄露审计，不作为模型输入。
 
-## `user_activity_features.parquet`
+### `user_features.parquet`
 
-| 字段名 | 含义 |
-| ---- | ---- |
-| `Column` | 定义 |
-| ---- | ---- |
-| `dataset_split` | 数据集划分：train / validation / test |
-| `user_id` | 用户唯一标识 |
-| `item_id` | 商品唯一标识 |
-| `history_start` | 当前 history window 开始日期 |
-| `history_end` | 当前 history window 结束日期 |
-| `label_date` | 当前预测/label 日期 |
-| `last_behavior_type` | history window 内该 user‑item 最后一次行为类型 |
-| `last_behavior_hour` | 最后一次行为发生的小时，0–23 |
-| `last_behavior_days_ago` | 从 label_date 00:00:00 到最后一次行为的时间间隔，单位为天 |
-| `last_10_behavior_sequence` | history window 内该 user‑item 最近最多10次行为，按时间先后排列；不足10次则保留全部 |
-| `pv_to_cart_count` | history window 内相邻 pv → cart 的次数 |
-| `cart_to_buy_count` | history window 内相邻 cart → buy 的次数 |
-| `pv_to_buy_count` | history window 内相邻 pv → buy 的次数 |
-| `fav_to_buy_count` | history window 内相邻 fav → buy 的次数 |
+粒度：`dataset_split + user_id`。
 
-## `user_sequence_features.parquet`
+| 字段名 | 字段含义 | 计算逻辑 | 数据来源 | 用于建模 |
+| --- | --- | --- | --- | --- |
+| `user_id` | 用户标识 | 原字段 | clean Parquet | 关联键，不直接使用 |
+| `event_count` | 用户行为总数 | 历史窗口事件行数 | clean Parquet | 可选，需注意窗口长度 |
+| `pv_count` | 浏览数 | `behavior_name=pv` 行数 | clean Parquet | 可选 |
+| `fav_count` | 收藏数 | `behavior_name=fav` 行数 | clean Parquet | 可选 |
+| `cart_count` | 加购数 | `behavior_name=cart` 行数 | clean Parquet | 可选 |
+| `buy_count` | 购买数 | `behavior_name=buy` 行数 | clean Parquet | 可选 |
 
-| 字段名 | 含义 |
-| ---- | ---- |
-| `dataset_split` | 数据集划分：train / validation / test |
-| `user_id` | 用户唯一标识 |
-| `item_id` | 商品唯一标识 |
-| `history_start` | 当前 history window 开始日期 |
-| `history_end` | 当前 history window 结束日期 |
-| `label_date` | 当前预测/label 日期 |
-| `last_behavior_type` | history window 内该 user‑item 最后一次行为类型 |
-| `last_behavior_hour` | 最后一次行为发生的小时，0–23 |
-| `last_behavior_days_ago` | 从 label_date 00:00:00 到最后一次行为的时间间隔，单位为天 |
-| `last_10_behavior_sequence` | history window 内该 user‑item 最近最多10次行为，按时间先后排列；不足10次则保留全部 |
-| `pv_to_cart_count` | history window 内相邻 pv → cart 的次数 |
-| `cart_to_buy_count` | history window 内相邻 cart → buy 的次数 |
-| `pv_to_buy_count` | history window 内相邻 pv → buy 的次数 |
-| `fav_to_buy_count` | history window 内相邻 fav → buy 的次数 |
+### `user_activity_features.parquet`
 
-## `item_behavior_features.parquet`
+粒度：`dataset_split + user_id`。`activity_level` 的 P25/P75 只由训练窗口的 `avg_daily_event_count` 计算，并固定应用到验证和测试窗口。
 
-| 字段名 | 含义 |
-| ---- | ---- |
-| `dataset_split` | 数据集划分：train / validation / test |
-| `item_id` | 商品唯一标识 |
-| `category_id` | 商品所属类别 |
-| `history_start` | 当前 history window 开始日期 |
-| `history_end` | 当前 history window 结束日期 |
-| `label_date` | 当前预测/label 日期；该日期及之后行为不能用于构造特征 |
-| `item_total_count` | 当前 history window 内该商品的总行为次数 |
-| `item_pv_count` | 当前 history window 内该商品被浏览（PV）的次数 |
-| `item_fav_count` | 当前 history window 内该商品被收藏的次数 |
-| `item_cart_count` | 当前 history window 内该商品被加购的次数 |
-| `item_buy_count` | 当前 history window 内该商品被购买的次数 |
-| `item_unique_user_count` | 当前 history window 内与该商品发生过至少一次行为的不同用户数 |
-| `item_unique_buyer_count` | 当前 history window 内购买过该商品的不同用户数 |
-| `item_active_day_count` | 当前 history window 内该商品发生行为的不同日期数 |
-| `item_fav_to_pv_rate` | `item_fav_count` / `item_pv_count`；PV=0时设为0 |
-| `item_cart_to_pv_rate` | `item_cart_count` / `item_pv_count`；PV=0时设为0 |
-| `item_buy_to_pv_rate` | `item_buy_count` / `item_pv_count`；PV=0时设为0 |
-| `item_heat_level` | 基于训练集固定阈值划分的商品热度等级 |
+| 字段名 | 字段含义 | 计算逻辑 | 数据来源 | 用于建模 |
+| --- | --- | --- | --- | --- |
+| `user_id` | 用户标识 | 原字段 | clean Parquet | 关联键，不直接使用 |
+| `window_days` | 窗口天数 | `history_end-history_start+1` | 窗口配置 | 否，审计字段 |
+| `event_count` | 用户行为总数 | 历史窗口事件行数 | clean Parquet | 建议使用日均字段替代 |
+| `active_day_count` | 活跃天数 | 行为日期去重数 | clean Parquet | 是 |
+| `active_day_ratio` | 活跃日比例 | `active_day_count/window_days` | 派生 | 是 |
+| `avg_daily_event_count` | 日均行为数 | `event_count/window_days` | 派生 | 是 |
+| `avg_active_day_event_count` | 活跃日日均行为数 | `event_count/active_day_count` | 派生 | 是 |
+| `days_since_last_event` | 距末次行为天数 | `label_date-last_event_time` | 派生 | 是 |
+| `unique_item_count` | 交互商品数 | `item_id` 去重数 | clean Parquet | 是 |
+| `unique_category_count` | 交互类目数 | `category_id` 去重数 | clean Parquet | 是 |
+| `pv_count_per_day` | 日均浏览数 | `pv_count/window_days` | 派生 | 是 |
+| `fav_count_per_day` | 日均收藏数 | `fav_count/window_days` | 派生 | 是 |
+| `cart_count_per_day` | 日均加购数 | `cart_count/window_days` | 派生 | 是 |
+| `buy_count_per_day` | 日均购买数 | `buy_count/window_days` | 派生 | 是 |
+| `activity_level` | 活跃等级 | 训练集 P25/P75 分为 low/medium/high | 派生 | 编码后可用 |
+
+### `user_sequence_features.parquet`
+
+粒度：`dataset_split + user_id + item_id`。
+
+| 字段名 | 字段含义 | 计算逻辑 | 数据来源 | 用于建模 |
+| --- | --- | --- | --- | --- |
+| `user_id` | 用户标识 | 原字段 | clean Parquet | 关联键，不直接使用 |
+| `item_id` | 商品标识 | 原字段 | clean Parquet | 关联键，不直接使用 |
+| `last_behavior_type` | 最后行为类型 | 历史窗口末次行为 | clean Parquet | 编码后可用 |
+| `last_behavior_hour` | 最后行为小时 | 末次行为时间的小时 | clean Parquet | 是 |
+| `last_behavior_days_ago` | 距最后行为天数 | `label_date-last_behavior_time` | 派生 | 是 |
+| `last_10_behavior_sequence` | 最近行为序列 | 每个用户—商品最近最多10次行为按时间连接 | clean Parquet | 序列编码后可用 |
+
+同一小时内无法从原数据获得更细时间顺序，使用 clean Parquet 中的稳定原始行序作为并列顺序。转移次数不在本表生成，留给后续转化链路特征表。
+
+### `item_behavior_features.parquet`
+
+粒度：`dataset_split + item_id`。
+
+| 字段名 | 字段含义 | 计算逻辑 | 数据来源 | 用于建模 |
+| --- | --- | --- | --- | --- |
+| `item_id` | 商品标识 | 原字段 | clean Parquet | 关联键，不直接使用 |
+| `category_id` | 所属类目 | 窗口内唯一类目映射 | clean Parquet | 关联或编码后使用 |
+| `item_total_count` | 商品行为总数 | 历史窗口事件行数 | clean Parquet | 可选，需注意窗口长度 |
+| `item_pv_count` | 商品浏览数 | `behavior_name=pv` 行数 | clean Parquet | 可选 |
+| `item_fav_count` | 商品收藏数 | `behavior_name=fav` 行数 | clean Parquet | 可选 |
+| `item_cart_count` | 商品加购数 | `behavior_name=cart` 行数 | clean Parquet | 可选 |
+| `item_buy_count` | 商品购买数 | `behavior_name=buy` 行数 | clean Parquet | 可选 |
+| `item_unique_user_count` | 交互用户数 | `user_id` 去重数 | clean Parquet | 是 |
+| `item_unique_buyer_count` | 购买用户数 | 购买行为中的 `user_id` 去重数 | clean Parquet | 是 |
+| `item_active_day_count` | 商品活跃天数 | 行为日期去重数 | clean Parquet | 是 |
+
+商品热度等级不在本表生成，转化率也不在本表生成，分别留给后续商品热度特征表和转化链路特征表。
 

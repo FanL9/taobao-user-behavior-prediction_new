@@ -48,4 +48,13 @@
 | `data/interim/category_intermediate.parquet` | 类目粒度历史行为中间统计 |
 | `data/interim/time_intermediate.parquet` | 日期和小时粒度历史行为中间统计 |
 
+## 已完成的前四张特征表
+
+| 文件 | 简短说明 |
+| --- | --- |
+| `data/features/user_features.parquet` | 用户基础行为计数特征 |
+| `data/features/user_activity_features.parquet` | 用户活跃度与日均行为特征 |
+| `data/features/user_sequence_features.parquet` | 用户—商品最近行为序列特征 |
+| `data/features/item_behavior_features.parquet` | 商品基础行为统计特征 |
+
 禁止使用 `git add -f`、Git LFS 或修改忽略规则将任何 `data/` 数据文件上传到 GitHub。

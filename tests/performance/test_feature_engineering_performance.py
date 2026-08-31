@@ -1,360 +1,106 @@
-import os
-import time
-import subprocess
+"""Performance test for the first four stage-two feature tables."""
+
+from __future__ import annotations
+
+import json
 import threading
+import time
+
+import pandas as pd
 import psutil
-import sys
 
-# ============================================================
-# Configuration
-# ============================================================
-
-FEATURE_SCRIPT = "src/features/feature.py"
-
-PYTHON_EXE = sys.executable
+from src.features.feature import generate_feature_tables
 
 
-# ============================================================
-# Resource Monitor
-# ============================================================
+def _sample_memory(
+    process: psutil.Process,
+    stop_event: threading.Event,
+    samples: list[int],
+) -> None:
+    """Sample process RSS until feature generation finishes.
 
-class ResourceMonitor:
+    Args:
+        process: Current Python process whose RSS is sampled.
+        stop_event: Signal set after generation finishes.
+        samples: Mutable output list receiving RSS values in bytes.
 
-    def __init__(self, process):
+    Returns:
+        None. RSS values are appended to ``samples``.
+    """
 
-        self.process = process
-
-        self.running = False
-
-        self.cpu_samples = []
-        self.memory_samples = []
-
-        self.thread = None
-
-    def monitor(self):
-
-        while self.running:
-
-            try:
-
-                cpu = self.process.cpu_percent(
-                    interval=0.5
-                )
-
-                memory = (
-                    self.process.memory_info().rss
-                    / 1024
-                    / 1024
-                )
-
-                self.cpu_samples.append(cpu)
-                self.memory_samples.append(memory)
-
-            except psutil.NoSuchProcess:
-
-                break
-
-    def start(self):
-
-        self.running = True
-
-        self.thread = threading.Thread(
-            target=self.monitor,
-            daemon=True
-        )
-
-        self.thread.start()
-
-    def stop(self):
-
-        self.running = False
-
-        if self.thread is not None:
-
-            self.thread.join(
-                timeout=2
-            )
-
-    def average_cpu(self):
-
-        if not self.cpu_samples:
-
-            return 0
-
-        return (
-            sum(self.cpu_samples)
-            / len(self.cpu_samples)
-        )
-
-    def peak_memory(self):
-
-        if not self.memory_samples:
-
-            return 0
-
-        return max(
-            self.memory_samples
-        )
+    while not stop_event.wait(0.01):
+        try:
+            samples.append(process.memory_info().rss)
+        except psutil.Error:
+            return
 
 
-# ============================================================
-# GPU Monitoring
-# ============================================================
+def test_stage2_feature_generation_performance(tmp_path) -> None:
+    """Record runtime and resources for the four-table generation interface.
 
-def get_gpu_usage():
+    Args:
+        tmp_path: Pytest temporary directory for Parquet input and outputs.
 
-    try:
+    Returns:
+        None. The test writes a temporary JSON metrics record and validates it.
+    """
 
-        result = subprocess.run(
-
-            [
-                "nvidia-smi",
-                "--query-gpu=utilization.gpu",
-                "--format=csv,noheader,nounits"
-            ],
-
-            capture_output=True,
-
-            text=True,
-
-            timeout=5
-        )
-
-        if result.returncode != 0:
-
-            return None
-
-        values = []
-
-        for line in result.stdout.splitlines():
-
-            line = line.strip()
-
-            if line:
-
-                values.append(
-                    float(line)
-                )
-
-        if not values:
-
-            return None
-
-        return (
-            sum(values)
-            / len(values)
-        )
-
-    except Exception:
-
-        return None
-
-
-# ============================================================
-# Main Performance Test
-# ============================================================
-
-def main():
-
-    print("=" * 70)
-
-    print(
-        "FEATURE.PY PERFORMANCE TEST"
+    rows = 50_000
+    valid_hours = pd.date_range("2025-11-18", "2025-12-07 23:00", freq="h").append(
+        pd.date_range("2025-12-09", "2025-12-14 23:00", freq="h")
+    ).append(pd.date_range("2025-12-16", "2025-12-17 23:00", freq="h"))
+    row_index = pd.RangeIndex(rows)
+    event_time = valid_hours.take(row_index % len(valid_hours))
+    item_id = row_index % 5_000 + 1
+    behavior_names = pd.Series(["pv", "fav", "cart", "buy"])
+    clean_data = pd.DataFrame(
+        {
+            "time": event_time.strftime("%Y-%m-%d %H"),
+            "user_id": row_index % 1_000 + 1,
+            "item_id": item_id,
+            "category_id": item_id % 100 + 1,
+            "behavior_name": behavior_names.take(row_index % 4).to_numpy(),
+            "behavior_date": event_time.strftime("%Y-%m-%d"),
+        }
     )
+    input_path = tmp_path / "user_behavior_clean.parquet"
+    output_directory = tmp_path / "features"
+    clean_data.to_parquet(input_path, index=False)
 
-    print("=" * 70)
-
-    # --------------------------------------------------------
-    # Check feature.py
-    # --------------------------------------------------------
-
-    if not os.path.exists(
-        FEATURE_SCRIPT
-    ):
-
-        print("\nERROR:")
-        print(
-            "feature.py not found:"
-        )
-        print(
-            FEATURE_SCRIPT
-        )
-
-        return
-
-    print("\nTarget script:")
-    print(
-        FEATURE_SCRIPT
+    process = psutil.Process()
+    stop_event = threading.Event()
+    memory_samples = [process.memory_info().rss]
+    cpu_before = process.cpu_times()
+    sampler = threading.Thread(
+        target=_sample_memory,
+        args=(process, stop_event, memory_samples),
+        daemon=True,
     )
+    sampler.start()
+    started_at = time.perf_counter()
+    outputs = generate_feature_tables(input_path, output_directory)
+    runtime_seconds = time.perf_counter() - started_at
+    stop_event.set()
+    sampler.join()
+    memory_samples.append(process.memory_info().rss)
+    cpu_after = process.cpu_times()
 
-    print("\nStarting feature.py...")
-    print(
-        "Resource monitoring started."
-    )
+    metrics = {
+        "runtime_seconds": round(runtime_seconds, 6),
+        "process_cpu_time_seconds": round(
+            cpu_after.user + cpu_after.system - cpu_before.user - cpu_before.system,
+            6,
+        ),
+        "peak_process_rss_bytes": max(memory_samples),
+        "gpu_used": False,
+    }
+    record_path = tmp_path / "stage2_feature_performance.json"
+    record_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(metrics, sort_keys=True))
 
-    print("-" * 70)
-
-    # --------------------------------------------------------
-    # Start feature.py
-    # --------------------------------------------------------
-
-    start_time = time.perf_counter()
-
-    process = subprocess.Popen(
-
-        [
-            PYTHON_EXE,
-            FEATURE_SCRIPT
-        ],
-
-        stdout=None,
-
-        stderr=None
-    )
-
-    ps_process = psutil.Process(
-        process.pid
-    )
-
-    # --------------------------------------------------------
-    # Start monitoring
-    # --------------------------------------------------------
-
-    monitor = ResourceMonitor(
-        ps_process
-    )
-
-    monitor.start()
-
-    # --------------------------------------------------------
-    # Monitor GPU
-    # --------------------------------------------------------
-
-    gpu_samples = []
-
-    while process.poll() is None:
-
-        gpu_usage = get_gpu_usage()
-
-        if gpu_usage is not None:
-
-            gpu_samples.append(
-                gpu_usage
-            )
-
-        time.sleep(1)
-
-    # --------------------------------------------------------
-    # Stop monitoring
-    # --------------------------------------------------------
-
-    monitor.stop()
-
-    end_time = time.perf_counter()
-
-    total_runtime = (
-        end_time
-        - start_time
-    )
-
-    exit_code = process.returncode
-
-    # --------------------------------------------------------
-    # GPU result
-    # --------------------------------------------------------
-
-    if gpu_samples:
-
-        average_gpu = (
-            sum(gpu_samples)
-            / len(gpu_samples)
-        )
-
-        peak_gpu = max(
-            gpu_samples
-        )
-
-    else:
-
-        average_gpu = None
-
-        peak_gpu = None
-
-    # ========================================================
-    # Final Results
-    # ========================================================
-
-    print("\n")
-
-    print("=" * 70)
-
-    print(
-        "PERFORMANCE TESTING RESULTS"
-    )
-
-    print("=" * 70)
-
-    print(
-        f"Total runtime      : "
-        f"{total_runtime:.2f} seconds"
-    )
-
-    print(
-        f"Average CPU usage  : "
-        f"{monitor.average_cpu():.2f}%"
-    )
-
-    print(
-        f"Peak memory usage  : "
-        f"{monitor.peak_memory():.2f} MB"
-    )
-
-    if average_gpu is not None:
-
-        print(
-            f"Average GPU usage  : "
-            f"{average_gpu:.2f}%"
-        )
-
-        print(
-            f"Peak GPU usage     : "
-            f"{peak_gpu:.2f}%"
-        )
-
-    else:
-
-        print(
-            "Average GPU usage  : N/A"
-        )
-
-        print(
-            "Peak GPU usage     : N/A"
-        )
-
-    print(
-        f"Process exit code  : "
-        f"{exit_code}"
-    )
-
-    if exit_code == 0:
-
-        print(
-            "Status             : SUCCESS"
-        )
-
-    else:
-
-        print(
-            "Status             : FAILED"
-        )
-
-    print("=" * 70)
-
-
-# ============================================================
-# Run
-# ============================================================
-
-if __name__ == "__main__":
-
-    main()
+    assert len(outputs) == 4
+    assert 0 < metrics["runtime_seconds"] < 30
+    assert metrics["process_cpu_time_seconds"] >= 0
+    assert metrics["peak_process_rss_bytes"] > 0
+    assert metrics["gpu_used"] is False
+    assert json.loads(record_path.read_text(encoding="utf-8")) == metrics
