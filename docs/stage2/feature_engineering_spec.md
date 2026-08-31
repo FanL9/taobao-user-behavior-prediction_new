@@ -5,7 +5,7 @@
 阶段二特征工程分为两层：
 
 1. 基础统计中间表层：基于 `data/processed/user_behavior_clean.parquet` 生成用户、商品、类目和时间四张中间表。
-2. 最终特征表层：基于阶段二既定时间窗口和清洗后的行为数据，由 `src/features/feature.py` 统一生成八类特征表，输出至 `data/features/`。
+2. 特征表层：基于阶段二既定时间窗口和清洗后的行为数据，由 `src/features/feature.py` 统一生成八类特征表，输出至 `data/features/`。
 
 本阶段只负责特征构造，不生成监督学习标签，不执行采样、模型训练、模型评估或最终特征宽表整合。
 
@@ -17,14 +17,14 @@
 | `validation` | 2025-12-09 | 2025-12-14 | 2025-12-15 |
 | `test` | 2025-12-16 | 2025-12-17 | 2025-12-18 |
 
-起止日期均为闭区间。所有中间表和最终特征表均写入或保留 `history_start`、`history_end` 和 `label_date`，统计字段只能使用对应历史闭区间内的事件。
+起止日期均为闭区间。所有中间表和特征表均写入或保留 `history_start`、`history_end` 和 `label_date`，统计字段只能使用对应历史闭区间内的事件。
 
 ## 防止未来信息泄露
 
 - 标签日事件不得进入对应历史特征统计。
 - 标签日之后的事件不得进入对应历史特征统计。
 - `train`、`validation`、`test` 三个历史窗口分别计算，不跨窗口累计。
-- 所有最终特征均满足 `history_end < label_date`。
+- 所有特征均满足 `history_end < label_date`。
 - 时间行为特征中的 `behavior_date` 必须位于对应 `history_start` 与 `history_end` 之间。
 - 商品热度排名只在当前 `dataset_split` 内计算，不允许不同窗口之间互相参与排名。
 - 本阶段不生成监督学习 `label` 字段。
@@ -38,13 +38,13 @@
 - 行为编码：`1=pv`、`2=fav`、`3=cart`、`4=buy`。
 - 所有计数均为对应历史窗口内的原始行为事件数。
 
-## 八类最终特征表
+## 八类特征表
 
 统一实现入口：`src/features/feature.py`
 
 统一输出目录：`data/features/`
 
-八张最终特征表为：
+八张特征表为：
 
 | 序号 | 输出文件 | 特征类别 |
 | --- | --- | --- |
@@ -57,7 +57,7 @@
 | 7 | `time_behavior_features.parquet` | 时间行为特征 |
 | 8 | `conversion_chain_features.parquet` | 转化链路特征 |
 
-前四张表的字段和粒度沿用当前 `feature.py` 与 `feature_dictionary.md` 的正式实现。
+八张表的完整字段、计算逻辑和粒度以 `feature_dictionary.md` 为准。
 
 ### 商品热度特征表
 
@@ -117,8 +117,6 @@
 分母为 0 时结果定义为缺失值，不填 0，也不进行平滑。
 
 这些值属于历史行为次数比，不表示严格按时间顺序发生的用户转化概率，因此结果不要求限制在 `[0, 1]`。
-
-> `item_behavior_features.parquet` 中已有的 `item_fav_to_pv_rate`、`item_cart_to_pv_rate` 和 `item_buy_to_pv_rate` 沿用前四张特征表现有实现口径；它们与本节 `buy_per_*` 字段不是同一组指标，不应混用。
 
 ## 输出与存储约定
 

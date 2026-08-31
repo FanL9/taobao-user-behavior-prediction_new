@@ -1,8 +1,8 @@
-# 阶段二前四张特征表说明
+# 阶段二八张特征表说明
 
 ## 范围
 
-当前只生成用户基础行为、用户活跃度、用户—商品行为序列和商品行为四张特征表。不生成商品热度、类目行为、时间行为、转化链路、标签或最终特征宽表。
+阶段二基于 `data/processed/user_behavior_clean.parquet` 统一生成八张独立特征表。本阶段不生成 `label`，不训练或评估模型，不采样，也不合并最终特征宽表。
 
 ## 时间窗口
 
@@ -12,20 +12,27 @@
 | validation | 2025-12-09 | 2025-12-14 | 2025-12-15 |
 | test | 2025-12-16 | 2025-12-17 | 2025-12-18 |
 
-所有特征只读取闭区间 `history_start` 至 `history_end`；`label_date` 及之后的数据不参与计算。
+所有统计只读取闭区间 `history_start` 至 `history_end`。`label_date` 及之后的数据不得参与特征计算。
 
-## 输出
+## 八张输出
 
 | 文件 | 粒度 | 内容 |
 | --- | --- | --- |
-| `data/features/user_features.parquet` | `dataset_split + user_id` | 用户四类行为计数 |
-| `data/features/user_activity_features.parquet` | `dataset_split + user_id` | 活跃天数、日均行为、最近活跃和活跃等级 |
-| `data/features/user_sequence_features.parquet` | `dataset_split + user_id + item_id` | 用户—商品最近行为与最近10次序列 |
-| `data/features/item_behavior_features.parquet` | `dataset_split + item_id` | 商品行为、交互用户、购买用户和活跃天数统计 |
+| `user_features.parquet` | `dataset_split + user_id` | 用户四类基础行为计数 |
+| `user_activity_features.parquet` | `dataset_split + user_id` | 活跃天数、日均行为、最近活跃及活跃等级 |
+| `user_sequence_features.parquet` | `dataset_split + user_id + item_id` | 用户—商品最近行为及最近10次序列 |
+| `item_behavior_features.parquet` | `dataset_split + item_id` | 商品行为、用户、购买用户及活跃天数统计 |
+| `item_popularity_features.parquet` | `dataset_split + item_id` | 商品行为量、用户量、活跃天数和购买量排名 |
+| `category_behavior_features.parquet` | `dataset_split + category_id` | 类目行为及覆盖用户、商品、活跃天数统计 |
+| `time_behavior_features.parquet` | `dataset_split + behavior_date + behavior_hour` | 实际日期—小时行为及实体数量统计 |
+| `conversion_chain_features.parquet` | `dataset_split + item_id` | 商品购买数相对浏览、收藏和加购次数的比率 |
 
-## 职责边界
+八张 Parquet 统一输出到 `data/features/`。详细字段见 `feature_dictionary.md`。
 
-- 商品热度及等级由后续商品热度特征表负责。
-- 行为转化率和相邻转移统计由后续转化链路特征表负责。
-- 本阶段不构造 `label`，不合并最终宽表。
+## 统一约束
+
+- 每张表的主键在其粒度内唯一。
+- 商品热度 dense rank 只在当前 `dataset_split` 内计算，排名越小代表历史指标越高。
+- 转化链路分母为 0 时结果为缺失值，不填 0、不平滑，也不限制结果必须小于等于 1。
+- 时间行为表只输出历史窗口内真实存在的日期—小时组合。
 - 大型 Parquet 只在本地生成并同步至 Google Drive，不上传 GitHub。

@@ -164,7 +164,7 @@ def test_generation_rejects_inconsistent_behavior_date() -> None:
 def test_generate_all_feature_tables_writes_eight_outputs(
     tmp_path,
 ) -> None:
-    """?????????????????????????"""
+    """Verify unified generation writes and validates all eight outputs."""
 
     from src.features.feature import (
         ALL_OUTPUT_FILENAMES,

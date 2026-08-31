@@ -1,4 +1,4 @@
-"""Performance test for the first four stage-two feature tables."""
+"""Performance test for all eight stage-two feature tables."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def _sample_memory(
 
 
 def test_stage2_feature_generation_performance(tmp_path) -> None:
-    """Record runtime and resources for the four-table generation interface.
+    """Record runtime and resources for the eight-table generation interface.
 
     Args:
         tmp_path: Pytest temporary directory for Parquet input and outputs.

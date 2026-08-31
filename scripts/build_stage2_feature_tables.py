@@ -1,4 +1,4 @@
-"""Command-line entry point for the first four stage-two feature tables."""
+"""Command-line entry point for all eight stage-two feature tables."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.features.feature import generate_feature_tables  # noqa: E402
+from src.features.feature import generate_all_feature_tables  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     """
 
     parser = argparse.ArgumentParser(
-        description="Build only the first four stage-two feature tables."
+        description="Build all eight stage-two feature tables."
     )
     parser.add_argument(
         "--input",
@@ -35,13 +35,13 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=PROJECT_ROOT / "data" / "features",
-        help="Directory for the four feature Parquet tables.",
+        help="Directory for the eight feature Parquet tables.",
     )
     return parser.parse_args()
 
 
 def main() -> int:
-    """Generate four feature tables and report paths plus runtime.
+    """Generate eight feature tables and report paths plus runtime.
 
     Returns:
         Process exit code: zero on success and one on generation failure.
@@ -50,7 +50,7 @@ def main() -> int:
     args = parse_args()
     started_at = time.perf_counter()
     try:
-        outputs = generate_feature_tables(args.input, args.output_dir)
+        outputs = generate_all_feature_tables(args.input, args.output_dir)
     except Exception as error:
         print(f"Feature-table generation failed: {error}", file=sys.stderr)
         return 1

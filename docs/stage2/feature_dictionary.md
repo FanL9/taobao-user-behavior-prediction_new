@@ -1,6 +1,6 @@
 # 阶段二特征字典
 
-本字典描述当前四张中间表字段。它们是后续特征构造的基础输入，本阶段均不直接用于建模。
+本字典统一描述四张中间表和八张特征表字段。中间表只作为特征构造的基础输入；特征表是否用于建模见各字段说明。
 
 ## 公共字段
 
@@ -60,11 +60,11 @@
 | `unique_item_count` | 日期—小时商品数 | `item_id` 去重计数 | clean Parquet | 日期—小时 | 否，中间统计字段 |
 | `unique_category_count` | 日期—小时类目数 | `category_id` 去重计数 | clean Parquet | 日期—小时 | 否，中间统计字段 |
 
-`event_count` 和四类行为计数字段适用于上述四张表，其具体粒度由所在表决定。转化率字段本阶段不落表，公式见 `feature_engineering_spec.md`。
+`event_count` 和四类行为计数字段适用于上述四张中间表，其具体粒度由所在表决定。转化率只落在后文的 `conversion_chain_features.parquet`，不写入中间表。
 
-## 已完成的前四张特征表
+## 八张特征表字段
 
-四张表共同包含 `dataset_split`、`history_start`、`history_end` 和 `label_date`。这些字段用于窗口关联和防泄露审计，不作为模型输入。
+八张表共同包含 `dataset_split`、`history_start`、`history_end` 和 `label_date`。这些字段用于窗口关联和防泄露审计，不作为模型输入。
 
 ### `user_features.parquet`
 
@@ -136,7 +136,7 @@
 商品热度等级不在本表生成，转化率也不在本表生成，分别留给后续商品热度特征表和转化链路特征表。
 
 
-## `item_popularity_features.parquet`
+### `item_popularity_features.parquet`
 
 商品热度特征表以 `dataset_split + item_id` 为唯一粒度，直接复用商品行为特征表中的历史统计，并在各 `dataset_split` 内独立计算降序 dense rank。不同历史窗口之间不会互相参与排名。
 
@@ -155,13 +155,12 @@
 | `item_buy_count` | 当前历史窗口内商品购买次数 |
 | `item_unique_user_count` | 当前历史窗口内与商品发生行为的去重用户数 |
 | `item_active_day_count` | 当前历史窗口内商品发生行为的活跃天数 |
-| `item_heat_level` | 基于训练集固定阈值划分的商品热度等级 |
 | `item_total_count_rank` | 当前 `dataset_split` 内按 `item_total_count` 降序计算的 dense rank |
 | `item_unique_user_count_rank` | 当前 `dataset_split` 内按 `item_unique_user_count` 降序计算的 dense rank |
 | `item_active_day_count_rank` | 当前 `dataset_split` 内按 `item_active_day_count` 降序计算的 dense rank |
 | `item_buy_count_rank` | 当前 `dataset_split` 内按 `item_buy_count` 降序计算的 dense rank |
 
-## `category_behavior_features.parquet`
+### `category_behavior_features.parquet`
 
 类目行为特征表以 `dataset_split + category_id` 为唯一粒度，各统计字段只使用当前历史窗口内的事件。
 
@@ -183,7 +182,7 @@
 | `category_cart_count` | 当前历史窗口内该类目的加购次数 |
 | `category_buy_count` | 当前历史窗口内该类目的购买次数 |
 
-## `time_behavior_features.parquet`
+### `time_behavior_features.parquet`
 
 时间行为特征表以 `dataset_split + behavior_date + behavior_hour` 为唯一粒度，只保留历史窗口内真实出现的日期—小时组合，不补造不存在的小时记录。
 
@@ -205,7 +204,7 @@
 | `time_cart_count` | 当前日期—小时组合内的加购次数 |
 | `time_buy_count` | 当前日期—小时组合内的购买次数 |
 
-## `conversion_chain_features.parquet`
+### `conversion_chain_features.parquet`
 
 转化链路特征表以 `dataset_split + item_id` 为唯一粒度。三个比率均为同一商品、同一历史窗口内的历史行为次数比，不表示严格按时间顺序发生的用户转化概率。
 

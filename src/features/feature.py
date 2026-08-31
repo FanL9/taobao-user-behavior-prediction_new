@@ -1,10 +1,4 @@
-"""Build the first four stage-two feature tables.
-
-This module creates only user basic behavior, user activity, user-item behavior
-sequence, and item behavior feature tables. Item popularity, category behavior,
-time behavior, conversion-chain features, labels, and a final wide table are
-outside this module's scope.
-"""
+"""Build the eight stage-two feature tables without labels or a wide table."""
 
 from __future__ import annotations
 
@@ -516,14 +510,14 @@ def generate_feature_tables(
             temporary.unlink(missing_ok=True)
 
     return output_paths
+
+
 # ============================================================
-# ????????
+# Remaining four feature tables and unified eight-table interface
 # ============================================================
 
-from pathlib import Path as _FeaturePath
 
-
-ASSIGNED_OUTPUT_FILENAMES = {
+REMAINING_OUTPUT_FILENAMES = {
     "item_popularity": "item_popularity_features.parquet",
     "category_behavior": "category_behavior_features.parquet",
     "time_behavior": "time_behavior_features.parquet",
@@ -532,23 +526,23 @@ ASSIGNED_OUTPUT_FILENAMES = {
 
 ALL_OUTPUT_FILENAMES = {
     **OUTPUT_FILENAMES,
-    **ASSIGNED_OUTPUT_FILENAMES,
+    **REMAINING_OUTPUT_FILENAMES,
 }
 
 
 def _item_behavior_table_key() -> str:
-    """?????????????????"""
+    """Return the logical key used for the item behavior feature table."""
 
     for name, filename in OUTPUT_FILENAMES.items():
         if filename == "item_behavior_features.parquet":
             return name
 
     raise KeyError(
-        "OUTPUT_FILENAMES ???? item_behavior_features.parquet"
+        "OUTPUT_FILENAMES does not define item_behavior_features.parquet."
     )
 
 
-def _assigned_behavior_counts(
+def _pivot_behavior_counts(
     history: pd.DataFrame,
     keys: list[str],
     prefix: str,
@@ -611,7 +605,15 @@ def _assigned_behavior_counts(
 def build_item_popularity_features(
     item_behavior: pd.DataFrame,
 ) -> pd.DataFrame:
-    """????????????????"""
+    """Build within-split item popularity ranks.
+
+    Args:
+        item_behavior: Item behavior feature table covering all splits.
+
+    Returns:
+        One row per split and item with behavior statistics and four descending
+        dense-rank popularity features.
+    """
 
     columns = [
         "dataset_split",
@@ -636,7 +638,7 @@ def build_item_popularity_features(
     ]
     if missing:
         raise ValueError(
-            "???????????????: "
+            "Item behavior table is missing columns: "
             + ", ".join(missing)
         )
 
@@ -676,10 +678,17 @@ def build_item_popularity_features(
     )
 
 
-def _assigned_window_metadata(
+def _window_metadata_from_item_behavior(
     item_behavior: pd.DataFrame,
 ) -> pd.DataFrame:
-    """??????????????????"""
+    """Extract and validate one history-window definition per split.
+
+    Args:
+        item_behavior: Item behavior feature table containing window metadata.
+
+    Returns:
+        One validated metadata row per ``dataset_split``.
+    """
 
     metadata = (
         item_behavior[
@@ -696,8 +705,12 @@ def _assigned_window_metadata(
 
     if metadata["dataset_split"].duplicated().any():
         raise ValueError(
-            "?? dataset_split ????????????"
+            "Each dataset_split must map to exactly one history window."
         )
+    if not pd.to_datetime(metadata["history_end"]).lt(
+        pd.to_datetime(metadata["label_date"])
+    ).all():
+        raise ValueError("Every history_end must be earlier than label_date.")
 
     return metadata
 
@@ -706,10 +719,19 @@ def build_category_behavior_features(
     clean_data: pd.DataFrame,
     item_behavior: pd.DataFrame,
 ) -> pd.DataFrame:
-    """?????????????"""
+    """Build category behavior features for all history windows.
+
+    Args:
+        clean_data: Stage-one clean behavior rows.
+        item_behavior: Item behavior table supplying the exact split windows.
+
+    Returns:
+        One row per split and category with behavior, entity, active-day, and
+        first/last-event statistics.
+    """
 
     prepared = _prepare_clean_data(clean_data)
-    metadata = _assigned_window_metadata(item_behavior)
+    metadata = _window_metadata_from_item_behavior(item_behavior)
 
     if "event_time" not in prepared.columns:
         prepared = prepared.copy()
@@ -731,17 +753,16 @@ def build_category_behavior_features(
     results = []
 
     for window in metadata.itertuples(index=False):
-        history_start = pd.Timestamp(window.history_start)
-        history_end = pd.Timestamp(window.history_end)
-        label_date = pd.Timestamp(window.label_date)
-
-        history = prepared[
-            pd.to_datetime(prepared["behavior_date"]).between(
-                history_start,
-                history_end,
-                inclusive="both",
-            )
-        ].copy()
+        feature_window = HistoryWindow(
+            window.dataset_split,
+            str(pd.Timestamp(window.history_start).date()),
+            str(pd.Timestamp(window.history_end).date()),
+            str(pd.Timestamp(window.label_date).date()),
+        )
+        history = select_feature_history(prepared, feature_window)
+        history_start = pd.Timestamp(feature_window.history_start)
+        history_end = pd.Timestamp(feature_window.history_end)
+        label_date = pd.Timestamp(feature_window.label_date)
 
         base = (
             history.groupby(
@@ -753,14 +774,14 @@ def build_category_behavior_features(
                 category_total_count=("category_id", "size"),
                 category_unique_user_count=("user_id", "nunique"),
                 category_unique_item_count=("item_id", "nunique"),
-                category_active_day_count=("behavior_date", "nunique"),
+                category_active_day_count=("event_date", "nunique"),
                 category_first_event_time=("event_time", "min"),
                 category_last_event_time=("event_time", "max"),
             )
             .reset_index()
         )
 
-        counts = _assigned_behavior_counts(
+        counts = _pivot_behavior_counts(
             history,
             ["category_id"],
             "category",
@@ -787,42 +808,37 @@ def build_time_behavior_features(
     clean_data: pd.DataFrame,
     item_behavior: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Build observed date-hour historical behavior features."""
+    """Build observed date-hour behavior features for all history windows.
+
+    Args:
+        clean_data: Stage-one clean behavior rows.
+        item_behavior: Item behavior table supplying the exact split windows.
+
+    Returns:
+        One row per split, observed date, and hour with behavior and distinct
+        entity counts. Missing date-hour combinations are not synthesized.
+    """
 
     prepared = _prepare_clean_data(clean_data).copy()
 
-    if "event_time" in prepared.columns:
-        event_time = pd.to_datetime(
-            prepared["event_time"],
-            errors="coerce",
-        )
-    else:
-        event_time = pd.to_datetime(
-            prepared["time"],
-            errors="coerce",
-        )
+    prepared["behavior_hour"] = prepared["event_time"].dt.hour.astype("int8")
+    prepared["weekday"] = prepared["event_time"].dt.weekday.astype("int8")
+    prepared["behavior_date"] = prepared["event_date"]
 
-    if "behavior_hour" not in prepared.columns:
-        prepared["behavior_hour"] = event_time.dt.hour
-
-    if "weekday" not in prepared.columns:
-        prepared["weekday"] = event_time.dt.weekday
-
-    metadata = _assigned_window_metadata(item_behavior)
+    metadata = _window_metadata_from_item_behavior(item_behavior)
     results = []
 
     for window in metadata.itertuples(index=False):
-        history_start = pd.Timestamp(window.history_start)
-        history_end = pd.Timestamp(window.history_end)
-        label_date = pd.Timestamp(window.label_date)
-
-        history = prepared[
-            pd.to_datetime(prepared["behavior_date"]).between(
-                history_start,
-                history_end,
-                inclusive="both",
-            )
-        ].copy()
+        feature_window = HistoryWindow(
+            window.dataset_split,
+            str(pd.Timestamp(window.history_start).date()),
+            str(pd.Timestamp(window.history_end).date()),
+            str(pd.Timestamp(window.label_date).date()),
+        )
+        history = select_feature_history(prepared, feature_window)
+        history_start = pd.Timestamp(feature_window.history_start)
+        history_end = pd.Timestamp(feature_window.history_end)
+        label_date = pd.Timestamp(feature_window.label_date)
 
         keys = [
             "behavior_date",
@@ -845,7 +861,7 @@ def build_time_behavior_features(
             .reset_index()
         )
 
-        counts = _assigned_behavior_counts(
+        counts = _pivot_behavior_counts(
             history,
             keys,
             "time",
@@ -876,7 +892,15 @@ def build_time_behavior_features(
 def build_conversion_chain_features(
     item_behavior: pd.DataFrame,
 ) -> pd.DataFrame:
-    """??????????????"""
+    """Build item-level historical conversion-chain ratios.
+
+    Args:
+        item_behavior: Item behavior feature table covering all splits.
+
+    Returns:
+        One row per split and item with buy-per-view, buy-per-favorite, and
+        buy-per-cart ratios. A zero denominator produces a missing value.
+    """
 
     columns = [
         "dataset_split",
@@ -898,7 +922,7 @@ def build_conversion_chain_features(
     ]
     if missing:
         raise ValueError(
-            "???????????????: "
+            "Item behavior table is missing columns: "
             + ", ".join(missing)
         )
 
@@ -931,11 +955,20 @@ def build_conversion_chain_features(
     )
 
 
-def build_assigned_feature_tables(
+def build_remaining_feature_tables(
     clean_data: pd.DataFrame,
     item_behavior: pd.DataFrame,
 ) -> dict[str, pd.DataFrame]:
-    """?? Issue #8 ???????"""
+    """Build the remaining four feature tables.
+
+    Args:
+        clean_data: Stage-one clean behavior rows.
+        item_behavior: Previously built item behavior feature table.
+
+    Returns:
+        Mapping containing item popularity, category behavior, time behavior,
+        and conversion-chain tables.
+    """
 
     return {
         "item_popularity": build_item_popularity_features(
@@ -957,22 +990,29 @@ def build_assigned_feature_tables(
 
 def build_all_feature_tables(
     clean_data: pd.DataFrame,
-    *args,
-    **kwargs,
+    windows: Iterable[HistoryWindow] = HISTORY_WINDOWS,
 ) -> dict[str, pd.DataFrame]:
-    """?????????????????????????"""
+    """Build exactly the eight stage-two feature tables.
+
+    Args:
+        clean_data: Stage-one clean behavior data.
+        windows: Leakage-safe history windows shared by all eight tables.
+
+    Returns:
+        Mapping containing the eight separate feature tables. No labels, model
+        training, sampling, or final wide-table join is performed.
+    """
 
     tables = build_feature_tables(
         clean_data,
-        *args,
-        **kwargs,
+        windows,
     )
 
     item_key = _item_behavior_table_key()
     item_behavior = tables[item_key]
 
     tables.update(
-        build_assigned_feature_tables(
+        build_remaining_feature_tables(
             clean_data,
             item_behavior,
         )
@@ -982,16 +1022,24 @@ def build_all_feature_tables(
 
 
 def generate_all_feature_tables(
-    input_parquet,
-    output_directory,
-    *args,
-    **kwargs,
-):
-    """???????????????"""
+    input_parquet: str | Path,
+    output_directory: str | Path,
+    windows: Iterable[HistoryWindow] = HISTORY_WINDOWS,
+) -> dict[str, Path]:
+    """Read clean Parquet and atomically write all eight feature tables.
 
-    source = _FeaturePath(input_parquet).expanduser().resolve()
+    Args:
+        input_parquet: Stage-one clean Parquet path.
+        output_directory: Directory receiving eight feature Parquet files.
+        windows: Leakage-safe history windows shared by all eight tables.
+
+    Returns:
+        Mapping from eight logical table names to resolved output paths.
+    """
+
+    source = Path(input_parquet).expanduser().resolve()
     destination = (
-        _FeaturePath(output_directory)
+        Path(output_directory)
         .expanduser()
         .resolve()
     )
@@ -1001,12 +1049,11 @@ def generate_all_feature_tables(
             f"Clean Parquet does not exist: {source}"
         )
 
-    clean_data = pd.read_parquet(source)
+    clean_data = pd.read_parquet(source, columns=list(REQUIRED_COLUMNS))
 
     tables = build_all_feature_tables(
         clean_data,
-        *args,
-        **kwargs,
+        windows,
     )
 
     destination.mkdir(
