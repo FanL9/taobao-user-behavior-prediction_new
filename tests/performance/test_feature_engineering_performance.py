@@ -9,7 +9,7 @@ import time
 import pandas as pd
 import psutil
 
-from src.features.feature import generate_feature_tables
+from src.features.feature import generate_all_feature_tables
 
 
 def _sample_memory(
@@ -78,7 +78,7 @@ def test_stage2_feature_generation_performance(tmp_path) -> None:
     )
     sampler.start()
     started_at = time.perf_counter()
-    outputs = generate_feature_tables(input_path, output_directory)
+    outputs = generate_all_feature_tables(input_path, output_directory)
     runtime_seconds = time.perf_counter() - started_at
     stop_event.set()
     sampler.join()
@@ -98,7 +98,7 @@ def test_stage2_feature_generation_performance(tmp_path) -> None:
     record_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(metrics, sort_keys=True))
 
-    assert len(outputs) == 4
+    assert len(outputs) == 8
     assert 0 < metrics["runtime_seconds"] < 30
     assert metrics["process_cpu_time_seconds"] >= 0
     assert metrics["peak_process_rss_bytes"] > 0

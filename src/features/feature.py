@@ -516,3 +516,525 @@ def generate_feature_tables(
             temporary.unlink(missing_ok=True)
 
     return output_paths
+# ============================================================
+# ????????
+# ============================================================
+
+from pathlib import Path as _FeaturePath
+
+
+ASSIGNED_OUTPUT_FILENAMES = {
+    "item_popularity": "item_popularity_features.parquet",
+    "category_behavior": "category_behavior_features.parquet",
+    "time_behavior": "time_behavior_features.parquet",
+    "conversion_chain": "conversion_chain_features.parquet",
+}
+
+ALL_OUTPUT_FILENAMES = {
+    **OUTPUT_FILENAMES,
+    **ASSIGNED_OUTPUT_FILENAMES,
+}
+
+
+def _item_behavior_table_key() -> str:
+    """?????????????????"""
+
+    for name, filename in OUTPUT_FILENAMES.items():
+        if filename == "item_behavior_features.parquet":
+            return name
+
+    raise KeyError(
+        "OUTPUT_FILENAMES ???? item_behavior_features.parquet"
+    )
+
+
+def _assigned_behavior_counts(
+    history: pd.DataFrame,
+    keys: list[str],
+    prefix: str,
+) -> pd.DataFrame:
+    """Aggregate PV/FAV/CART/BUY counts for one feature grain."""
+
+    if "behavior_name" in history.columns:
+        behavior_column = "behavior_name"
+        expected_values = ["pv", "fav", "cart", "buy"]
+        rename_map = {
+            "pv": f"{prefix}_pv_count",
+            "fav": f"{prefix}_fav_count",
+            "cart": f"{prefix}_cart_count",
+            "buy": f"{prefix}_buy_count",
+        }
+    elif "behavior_type" in history.columns:
+        behavior_column = "behavior_type"
+        expected_values = [1, 2, 3, 4]
+        rename_map = {
+            1: f"{prefix}_pv_count",
+            2: f"{prefix}_fav_count",
+            3: f"{prefix}_cart_count",
+            4: f"{prefix}_buy_count",
+        }
+    else:
+        raise ValueError(
+            "Clean data must contain behavior_name or behavior_type."
+        )
+
+    counts = (
+        history.groupby(
+            keys + [behavior_column],
+            observed=True,
+            sort=False,
+        )
+        .size()
+        .unstack(
+            behavior_column,
+            fill_value=0,
+        )
+        .reindex(
+            columns=expected_values,
+            fill_value=0,
+        )
+        .rename(columns=rename_map)
+        .reset_index()
+    )
+
+    count_columns = [
+        f"{prefix}_pv_count",
+        f"{prefix}_fav_count",
+        f"{prefix}_cart_count",
+        f"{prefix}_buy_count",
+    ]
+
+    counts[count_columns] = counts[count_columns].astype("int64")
+
+    return counts
+
+def build_item_popularity_features(
+    item_behavior: pd.DataFrame,
+) -> pd.DataFrame:
+    """????????????????"""
+
+    columns = [
+        "dataset_split",
+        "item_id",
+        "category_id",
+        "history_start",
+        "history_end",
+        "label_date",
+        "item_total_count",
+        "item_pv_count",
+        "item_fav_count",
+        "item_cart_count",
+        "item_buy_count",
+        "item_unique_user_count",
+        "item_active_day_count",
+    ]
+
+    missing = [
+        column
+        for column in columns
+        if column not in item_behavior.columns
+    ]
+    if missing:
+        raise ValueError(
+            "???????????????: "
+            + ", ".join(missing)
+        )
+
+    result = item_behavior.loc[:, columns].copy()
+
+    rank_sources = {
+        "item_total_count": "item_total_count_rank",
+        "item_unique_user_count": "item_unique_user_count_rank",
+        "item_active_day_count": "item_active_day_count_rank",
+        "item_buy_count": "item_buy_count_rank",
+    }
+
+    for source, target in rank_sources.items():
+        result[target] = (
+            result.groupby(
+                "dataset_split",
+                observed=True,
+                sort=False,
+            )[source]
+            .rank(
+                method="dense",
+                ascending=False,
+            )
+            .astype("int64")
+        )
+
+    return (
+        result.sort_values(
+            [
+                "dataset_split",
+                "item_total_count_rank",
+                "item_id",
+            ],
+            kind="stable",
+        )
+        .reset_index(drop=True)
+    )
+
+
+def _assigned_window_metadata(
+    item_behavior: pd.DataFrame,
+) -> pd.DataFrame:
+    """??????????????????"""
+
+    metadata = (
+        item_behavior[
+            [
+                "dataset_split",
+                "history_start",
+                "history_end",
+                "label_date",
+            ]
+        ]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    if metadata["dataset_split"].duplicated().any():
+        raise ValueError(
+            "?? dataset_split ????????????"
+        )
+
+    return metadata
+
+
+def build_category_behavior_features(
+    clean_data: pd.DataFrame,
+    item_behavior: pd.DataFrame,
+) -> pd.DataFrame:
+    """?????????????"""
+
+    prepared = _prepare_clean_data(clean_data)
+    metadata = _assigned_window_metadata(item_behavior)
+
+    if "event_time" not in prepared.columns:
+        prepared = prepared.copy()
+
+        if "time" in prepared.columns:
+            prepared["event_time"] = pd.to_datetime(
+                prepared["time"],
+                errors="coerce",
+            )
+        else:
+            prepared["event_time"] = (
+                pd.to_datetime(prepared["behavior_date"])
+                + pd.to_timedelta(
+                    prepared["behavior_hour"],
+                    unit="h",
+                )
+            )
+
+    results = []
+
+    for window in metadata.itertuples(index=False):
+        history_start = pd.Timestamp(window.history_start)
+        history_end = pd.Timestamp(window.history_end)
+        label_date = pd.Timestamp(window.label_date)
+
+        history = prepared[
+            pd.to_datetime(prepared["behavior_date"]).between(
+                history_start,
+                history_end,
+                inclusive="both",
+            )
+        ].copy()
+
+        base = (
+            history.groupby(
+                "category_id",
+                observed=True,
+                sort=False,
+            )
+            .agg(
+                category_total_count=("category_id", "size"),
+                category_unique_user_count=("user_id", "nunique"),
+                category_unique_item_count=("item_id", "nunique"),
+                category_active_day_count=("behavior_date", "nunique"),
+                category_first_event_time=("event_time", "min"),
+                category_last_event_time=("event_time", "max"),
+            )
+            .reset_index()
+        )
+
+        counts = _assigned_behavior_counts(
+            history,
+            ["category_id"],
+            "category",
+        )
+
+        table = base.merge(
+            counts,
+            on="category_id",
+            how="left",
+            validate="one_to_one",
+        )
+
+        table.insert(0, "dataset_split", window.dataset_split)
+        table.insert(2, "history_start", history_start)
+        table.insert(3, "history_end", history_end)
+        table.insert(4, "label_date", label_date)
+
+        results.append(table)
+
+    return pd.concat(results, ignore_index=True)
+
+
+def build_time_behavior_features(
+    clean_data: pd.DataFrame,
+    item_behavior: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build observed date-hour historical behavior features."""
+
+    prepared = _prepare_clean_data(clean_data).copy()
+
+    if "event_time" in prepared.columns:
+        event_time = pd.to_datetime(
+            prepared["event_time"],
+            errors="coerce",
+        )
+    else:
+        event_time = pd.to_datetime(
+            prepared["time"],
+            errors="coerce",
+        )
+
+    if "behavior_hour" not in prepared.columns:
+        prepared["behavior_hour"] = event_time.dt.hour
+
+    if "weekday" not in prepared.columns:
+        prepared["weekday"] = event_time.dt.weekday
+
+    metadata = _assigned_window_metadata(item_behavior)
+    results = []
+
+    for window in metadata.itertuples(index=False):
+        history_start = pd.Timestamp(window.history_start)
+        history_end = pd.Timestamp(window.history_end)
+        label_date = pd.Timestamp(window.label_date)
+
+        history = prepared[
+            pd.to_datetime(prepared["behavior_date"]).between(
+                history_start,
+                history_end,
+                inclusive="both",
+            )
+        ].copy()
+
+        keys = [
+            "behavior_date",
+            "behavior_hour",
+        ]
+
+        base = (
+            history.groupby(
+                keys,
+                observed=True,
+                sort=False,
+            )
+            .agg(
+                weekday=("weekday", "first"),
+                time_total_count=("behavior_hour", "size"),
+                time_unique_user_count=("user_id", "nunique"),
+                time_unique_item_count=("item_id", "nunique"),
+                time_unique_category_count=("category_id", "nunique"),
+            )
+            .reset_index()
+        )
+
+        counts = _assigned_behavior_counts(
+            history,
+            keys,
+            "time",
+        )
+
+        table = base.merge(
+            counts,
+            on=keys,
+            how="left",
+            validate="one_to_one",
+        )
+
+        table.insert(0, "dataset_split", window.dataset_split)
+        table.insert(3, "history_start", history_start)
+        table.insert(4, "history_end", history_end)
+        table.insert(5, "label_date", label_date)
+
+        table = table.sort_values(
+            ["behavior_date", "behavior_hour"],
+            kind="stable",
+        ).reset_index(drop=True)
+
+        results.append(table)
+
+    return pd.concat(results, ignore_index=True)
+
+
+def build_conversion_chain_features(
+    item_behavior: pd.DataFrame,
+) -> pd.DataFrame:
+    """??????????????"""
+
+    columns = [
+        "dataset_split",
+        "item_id",
+        "category_id",
+        "history_start",
+        "history_end",
+        "label_date",
+        "item_pv_count",
+        "item_fav_count",
+        "item_cart_count",
+        "item_buy_count",
+    ]
+
+    missing = [
+        column
+        for column in columns
+        if column not in item_behavior.columns
+    ]
+    if missing:
+        raise ValueError(
+            "???????????????: "
+            + ", ".join(missing)
+        )
+
+    result = item_behavior.loc[:, columns].copy()
+    numerator = result["item_buy_count"].astype("Float64")
+
+    denominators = {
+        "buy_per_pv": "item_pv_count",
+        "buy_per_fav": "item_fav_count",
+        "buy_per_cart": "item_cart_count",
+    }
+
+    for feature, denominator_column in denominators.items():
+        denominator = (
+            result[denominator_column]
+            .astype("Float64")
+            .mask(
+                result[denominator_column].eq(0)
+            )
+        )
+
+        result[feature] = numerator / denominator
+
+    return (
+        result.sort_values(
+            ["dataset_split", "item_id"],
+            kind="stable",
+        )
+        .reset_index(drop=True)
+    )
+
+
+def build_assigned_feature_tables(
+    clean_data: pd.DataFrame,
+    item_behavior: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    """?? Issue #8 ???????"""
+
+    return {
+        "item_popularity": build_item_popularity_features(
+            item_behavior
+        ),
+        "category_behavior": build_category_behavior_features(
+            clean_data,
+            item_behavior,
+        ),
+        "time_behavior": build_time_behavior_features(
+            clean_data,
+            item_behavior,
+        ),
+        "conversion_chain": build_conversion_chain_features(
+            item_behavior
+        ),
+    }
+
+
+def build_all_feature_tables(
+    clean_data: pd.DataFrame,
+    *args,
+    **kwargs,
+) -> dict[str, pd.DataFrame]:
+    """?????????????????????????"""
+
+    tables = build_feature_tables(
+        clean_data,
+        *args,
+        **kwargs,
+    )
+
+    item_key = _item_behavior_table_key()
+    item_behavior = tables[item_key]
+
+    tables.update(
+        build_assigned_feature_tables(
+            clean_data,
+            item_behavior,
+        )
+    )
+
+    return tables
+
+
+def generate_all_feature_tables(
+    input_parquet,
+    output_directory,
+    *args,
+    **kwargs,
+):
+    """???????????????"""
+
+    source = _FeaturePath(input_parquet).expanduser().resolve()
+    destination = (
+        _FeaturePath(output_directory)
+        .expanduser()
+        .resolve()
+    )
+
+    if not source.is_file():
+        raise FileNotFoundError(
+            f"Clean Parquet does not exist: {source}"
+        )
+
+    clean_data = pd.read_parquet(source)
+
+    tables = build_all_feature_tables(
+        clean_data,
+        *args,
+        **kwargs,
+    )
+
+    destination.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_paths = {}
+    temporary_paths = []
+
+    try:
+        for name, table in tables.items():
+            target = destination / ALL_OUTPUT_FILENAMES[name]
+            temporary = target.with_suffix(".parquet.tmp")
+            temporary_paths.append(temporary)
+
+            table.to_parquet(
+                temporary,
+                index=False,
+            )
+            temporary.replace(target)
+
+            output_paths[name] = target
+
+    finally:
+        for temporary in temporary_paths:
+            temporary.unlink(
+                missing_ok=True
+            )
+
+    return output_paths

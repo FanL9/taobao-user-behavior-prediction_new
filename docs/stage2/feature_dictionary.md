@@ -135,3 +135,94 @@
 
 商品热度等级不在本表生成，转化率也不在本表生成，分别留给后续商品热度特征表和转化链路特征表。
 
+
+## `item_popularity_features.parquet`
+
+商品热度特征表以 `dataset_split + item_id` 为唯一粒度，直接复用商品行为特征表中的历史统计，并在各 `dataset_split` 内独立计算降序 dense rank。不同历史窗口之间不会互相参与排名。
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `item_id` | 商品唯一标识 |
+| `category_id` | 商品所属类别 |
+| `history_start` | 当前历史窗口开始日期 |
+| `history_end` | 当前历史窗口结束日期 |
+| `label_date` | 对应标签日期；该日期及之后行为不得参与特征构造 |
+| `item_total_count` | 当前历史窗口内商品总行为次数 |
+| `item_pv_count` | 当前历史窗口内商品浏览次数 |
+| `item_fav_count` | 当前历史窗口内商品收藏次数 |
+| `item_cart_count` | 当前历史窗口内商品加购次数 |
+| `item_buy_count` | 当前历史窗口内商品购买次数 |
+| `item_unique_user_count` | 当前历史窗口内与商品发生行为的去重用户数 |
+| `item_active_day_count` | 当前历史窗口内商品发生行为的活跃天数 |
+| `item_heat_level` | 基于训练集固定阈值划分的商品热度等级 |
+| `item_total_count_rank` | 当前 `dataset_split` 内按 `item_total_count` 降序计算的 dense rank |
+| `item_unique_user_count_rank` | 当前 `dataset_split` 内按 `item_unique_user_count` 降序计算的 dense rank |
+| `item_active_day_count_rank` | 当前 `dataset_split` 内按 `item_active_day_count` 降序计算的 dense rank |
+| `item_buy_count_rank` | 当前 `dataset_split` 内按 `item_buy_count` 降序计算的 dense rank |
+
+## `category_behavior_features.parquet`
+
+类目行为特征表以 `dataset_split + category_id` 为唯一粒度，各统计字段只使用当前历史窗口内的事件。
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `category_id` | 类目唯一标识 |
+| `history_start` | 当前历史窗口开始日期 |
+| `history_end` | 当前历史窗口结束日期 |
+| `label_date` | 对应标签日期；该日期及之后行为不得参与特征构造 |
+| `category_total_count` | 当前历史窗口内该类目的总行为次数 |
+| `category_unique_user_count` | 当前历史窗口内与该类目发生行为的去重用户数 |
+| `category_unique_item_count` | 当前历史窗口内该类目涉及的去重商品数 |
+| `category_active_day_count` | 当前历史窗口内该类目的活跃天数 |
+| `category_first_event_time` | 当前历史窗口内该类目最早行为时间 |
+| `category_last_event_time` | 当前历史窗口内该类目最晚行为时间 |
+| `category_pv_count` | 当前历史窗口内该类目的浏览次数 |
+| `category_fav_count` | 当前历史窗口内该类目的收藏次数 |
+| `category_cart_count` | 当前历史窗口内该类目的加购次数 |
+| `category_buy_count` | 当前历史窗口内该类目的购买次数 |
+
+## `time_behavior_features.parquet`
+
+时间行为特征表以 `dataset_split + behavior_date + behavior_hour` 为唯一粒度，只保留历史窗口内真实出现的日期—小时组合，不补造不存在的小时记录。
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `behavior_date` | 行为日期 |
+| `behavior_hour` | 行为小时，范围 0～23 |
+| `history_start` | 当前历史窗口开始日期 |
+| `history_end` | 当前历史窗口结束日期 |
+| `label_date` | 对应标签日期；该日期及之后行为不得参与特征构造 |
+| `weekday` | 星期序号，Monday=0 |
+| `time_total_count` | 当前日期—小时组合内的总行为次数 |
+| `time_unique_user_count` | 当前日期—小时组合内的去重用户数 |
+| `time_unique_item_count` | 当前日期—小时组合内的去重商品数 |
+| `time_unique_category_count` | 当前日期—小时组合内的去重类目数 |
+| `time_pv_count` | 当前日期—小时组合内的浏览次数 |
+| `time_fav_count` | 当前日期—小时组合内的收藏次数 |
+| `time_cart_count` | 当前日期—小时组合内的加购次数 |
+| `time_buy_count` | 当前日期—小时组合内的购买次数 |
+
+## `conversion_chain_features.parquet`
+
+转化链路特征表以 `dataset_split + item_id` 为唯一粒度。三个比率均为同一商品、同一历史窗口内的历史行为次数比，不表示严格按时间顺序发生的用户转化概率。
+
+| 字段名 | 含义 |
+| ---- | ---- |
+| `dataset_split` | 数据集划分：train / validation / test |
+| `item_id` | 商品唯一标识 |
+| `category_id` | 商品所属类别 |
+| `history_start` | 当前历史窗口开始日期 |
+| `history_end` | 当前历史窗口结束日期 |
+| `label_date` | 对应标签日期；该日期及之后行为不得参与特征构造 |
+| `item_pv_count` | 当前历史窗口内商品浏览次数 |
+| `item_fav_count` | 当前历史窗口内商品收藏次数 |
+| `item_cart_count` | 当前历史窗口内商品加购次数 |
+| `item_buy_count` | 当前历史窗口内商品购买次数 |
+| `buy_per_pv` | `item_buy_count / item_pv_count`；分母为 0 时结果为缺失值 |
+| `buy_per_fav` | `item_buy_count / item_fav_count`；分母为 0 时结果为缺失值 |
+| `buy_per_cart` | `item_buy_count / item_cart_count`；分母为 0 时结果为缺失值 |
+
+> 转化链路中的比率不进行平滑，也不限制在 `[0, 1]`。例如历史购买次数高于收藏次数时，`buy_per_fav` 可以大于 1。

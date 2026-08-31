@@ -160,3 +160,115 @@ def test_generation_rejects_inconsistent_behavior_date() -> None:
     frame.loc[0, "behavior_date"] = "2025-11-18"
     with pytest.raises(ValueError, match="behavior_date"):
         build_feature_tables(frame)
+
+def test_generate_all_feature_tables_writes_eight_outputs(
+    tmp_path,
+) -> None:
+    """?????????????????????????"""
+
+    from src.features.feature import (
+        ALL_OUTPUT_FILENAMES,
+        generate_all_feature_tables,
+    )
+
+    clean = _clean_frame()
+
+    input_path = tmp_path / "user_behavior_clean.parquet"
+    output_directory = tmp_path / "features"
+
+    clean.to_parquet(
+        input_path,
+        index=False,
+    )
+
+    outputs = generate_all_feature_tables(
+        input_path,
+        output_directory,
+    )
+
+    assert len(outputs) == 8
+    assert set(outputs) == set(ALL_OUTPUT_FILENAMES)
+
+    for path in outputs.values():
+        assert path.is_file()
+
+    popularity = pd.read_parquet(
+        outputs["item_popularity"]
+    )
+    assert not popularity.duplicated(
+        ["dataset_split", "item_id"]
+    ).any()
+    assert (
+        pd.to_datetime(popularity["history_end"])
+        < pd.to_datetime(popularity["label_date"])
+    ).all()
+
+    category = pd.read_parquet(
+        outputs["category_behavior"]
+    )
+    category_total = (
+        category["category_pv_count"]
+        + category["category_fav_count"]
+        + category["category_cart_count"]
+        + category["category_buy_count"]
+    )
+    assert (
+        category["category_total_count"].to_numpy()
+        == category_total.to_numpy()
+    ).all()
+
+    time_table = pd.read_parquet(
+        outputs["time_behavior"]
+    )
+    behavior_date = pd.to_datetime(
+        time_table["behavior_date"]
+    )
+    history_start = pd.to_datetime(
+        time_table["history_start"]
+    )
+    history_end = pd.to_datetime(
+        time_table["history_end"]
+    )
+    label_date = pd.to_datetime(
+        time_table["label_date"]
+    )
+
+    assert (
+        (behavior_date >= history_start)
+        & (behavior_date <= history_end)
+        & (behavior_date < label_date)
+    ).all()
+
+    conversion = pd.read_parquet(
+        outputs["conversion_chain"]
+    )
+
+    for feature, denominator in {
+        "buy_per_pv": "item_pv_count",
+        "buy_per_fav": "item_fav_count",
+        "buy_per_cart": "item_cart_count",
+    }.items():
+        zero = conversion[denominator].eq(0)
+        nonzero = ~zero
+
+        assert conversion.loc[
+            zero,
+            feature,
+        ].isna().all()
+
+        expected = (
+            conversion.loc[nonzero, "item_buy_count"]
+            / conversion.loc[nonzero, denominator]
+        )
+
+        actual = conversion.loc[
+            nonzero,
+            feature,
+        ].astype(float)
+
+        assert (
+            (actual - expected)
+            .abs()
+            .le(1e-12)
+            .all()
+        )
