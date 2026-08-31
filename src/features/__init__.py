@@ -18,10 +18,23 @@ from .stage2_intermediate_tables import (
     build_intermediate_tables,
     generate_intermediate_tables,
 )
+from .user_item_feature_wide import (
+    FEATURE_TABLE_FILES,
+    PRIMARY_KEY,
+    QUALITY_REPORT_FILENAME,
+    WIDE_TABLE_FILENAME,
+    feature_role_mapping,
+    generate_user_item_feature_wide,
+    merge_user_item_feature_batch,
+)
 
 __all__ = [
     "HISTORY_WINDOWS",
     "HistoryWindow",
+    "FEATURE_TABLE_FILES",
+    "PRIMARY_KEY",
+    "QUALITY_REPORT_FILENAME",
+    "WIDE_TABLE_FILENAME",
     "build_all_feature_tables",
     "build_category_behavior_features",
     "build_conversion_chain_features",
@@ -33,4 +46,7 @@ __all__ = [
     "generate_all_feature_tables",
     "generate_feature_tables",
     "generate_intermediate_tables",
+    "feature_role_mapping",
+    "generate_user_item_feature_wide",
+    "merge_user_item_feature_batch",
 ]

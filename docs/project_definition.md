@@ -4,7 +4,7 @@
 
 ## 1. 项目目标
 
-使用历史浏览、收藏、加购和购买事件，构建可复现的数据处理、特征工程与购买预测流程。阶段一完成数据接入、质量检查和标准清洗；阶段二生成基础中间表和八张独立特征表；模型训练、评估及预测由后续阶段负责。
+使用历史浏览、收藏、加购和购买事件，构建可复现的数据处理、特征工程与购买预测流程。阶段一完成数据接入、质量检查和标准清洗；阶段二生成基础中间表、八张独立特征表和用户—商品初版特征宽表；模型训练、评估及预测由后续阶段负责。
 
 ## 2. 阶段一输入
 
@@ -54,7 +54,7 @@
 | `validation` | 2025-12-09 | 2025-12-14 | 2025-12-15 |
 | `test` | 2025-12-16 | 2025-12-17 | 2025-12-18 |
 
-阶段二所有统计只能使用 `history_start` 至 `history_end` 闭区间内的数据，必须满足 `history_end < label_date`。阶段二不生成 `label`，不训练模型，不采样，也不合并最终特征宽表。
+阶段二所有统计只能使用 `history_start` 至 `history_end` 闭区间内的数据，必须满足 `history_end < label_date`。阶段二不生成 `label`，不训练模型，不采样，也不执行最终入模特征筛选。
 
 ## 3. 产物与职责
 
@@ -66,13 +66,14 @@
 | DDL | `sql/ddl/001_create_schema.sql` | 仅定义空表结构 |
 | 标准清洗数据 | `data/processed/user_behavior_clean.parquet` | 阶段二唯一正式输入 |
 | 四张中间表 | `data/interim/` | 用户、商品、类目和时间维度的历史统计基础输入 |
-| 八张特征表 | `data/features/` | 八类独立特征输出，不包含标签和最终宽表 |
+| 八张特征表 | `data/features/` | 八类独立特征输出，不包含标签 |
+| 用户—商品初版特征宽表 | `data/features/user_item_feature_wide.parquet` | 合并八张特征表，不包含标签和最终入模筛选 |
 | 阶段一测试结果 | `reports/stage1/stage1_test_results.md` | 阶段一功能与性能测试结果 |
-| 阶段二测试结果 | `reports/stage2/stage2_test_results.md` | 中间表与八张特征表的功能及性能测试结果 |
+| 阶段二测试结果 | `reports/stage2/` | 中间表、八张特征表和初版宽表的功能、性能及质量记录 |
 
 CSV→Parquet 的职责仅为：校验表头、按声明类型解析、分块写入、返回行数/文件大小/耗时。它不负责修正缺失值、过滤异常、删除重复、排序、导入 SQLite 或生成分析指标。
 
-阶段二通过 `scripts/build_stage2_intermediate_tables.py` 生成四张中间表，通过 `scripts/build_stage2_feature_tables.py` 统一生成八张特征表。八张表的文件名、粒度和字段口径见 `docs/stage2/feature_table_design.md` 与 `docs/stage2/feature_dictionary.md`。
+阶段二通过 `scripts/build_stage2_intermediate_tables.py` 生成四张中间表，通过 `scripts/build_stage2_feature_tables.py` 统一生成八张特征表，再通过 `scripts/build_user_item_feature_wide.py` 合成用户—商品初版特征宽表。宽表口径见 `docs/stage2/user_item_feature_wide.md`。
 
 ## 4. SQLite 对象
 

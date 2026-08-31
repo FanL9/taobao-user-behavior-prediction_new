@@ -2,7 +2,7 @@
 
 ## 范围
 
-阶段二基于 `data/processed/user_behavior_clean.parquet` 统一生成八张独立特征表。本阶段不生成 `label`，不训练或评估模型，不采样，也不合并最终特征宽表。
+阶段二基于 `data/processed/user_behavior_clean.parquet` 统一生成八张独立特征表。本文只定义八张独立表；后续用户—商品初版宽表合并见 `user_item_feature_wide.md`。两部分均不生成 `label`，不训练或评估模型，也不采样。
 
 ## 时间窗口
 

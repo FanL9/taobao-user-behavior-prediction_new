@@ -1,4 +1,4 @@
-# 阶段二中间表与八张特征表测试记录
+# 阶段二中间表、八张特征表与初版宽表测试记录
 
 测试日期：2026-08-31
 
@@ -10,6 +10,7 @@
 
 - 四张中间表：用户、商品、类目、时间维度中间表。
 - 八张特征表：用户基础行为、用户活跃度、用户行为序列、商品行为、商品热度、类目行为、时间行为、转化链路。
+- 用户—商品初版特征宽表及其质量检查。
 - 时间窗口、主键、统计平衡、排名、转化率、序列和未来信息泄露检查。
 - 不包含标签生成、模型训练、采样、模型评估和最终特征宽表整合。
 
@@ -81,9 +82,54 @@ python -m pytest tests/performance/test_feature_engineering_performance.py -q -s
 
 测试结果：`1 passed in 2.36s`。
 
+## 用户—商品初版特征宽表
+
+执行命令：
+
+```powershell
+python scripts/build_user_item_feature_wide.py
+```
+
+全量生成结果：
+
+| 指标 | 结果 |
+| --- | ---: |
+| 样本量 | 4,384,645 |
+| 字段数 | 64 |
+| 文件大小 | 166,805,128 bytes |
+| 全量运行时间 | 99.347 秒 |
+| 重复主键 | 0 |
+| 缺失主键 | 0 |
+| 异常取值 | 0 |
+| 时间窗口违规 | 0 |
+| 状态 | passed |
+
+`buy_per_pv`、`buy_per_fav` 和 `buy_per_cart` 分别有 8,303、3,772,553 和 3,696,017 个缺失值，均由对应分母为 0 产生，符合转化链路口径；其余字段没有缺失值。
+
+功能测试：
+
+```text
+2 passed in 1.98s
+```
+
+性能测试只记录八张表已生成后的宽表合并过程，使用 50,000 行 clean 样例构造输入：
+
+| 指标 | 结果 |
+| --- | ---: |
+| 运行时间 | 1.465258 秒 |
+| 进程 CPU 时间 | 1.390625 秒 |
+| 进程 RSS 峰值 | 189,198,336 bytes |
+| GPU | 未使用 |
+
+性能测试结果：`1 passed in 3.72s`。
+
+机器可读质量报告为 `reports/stage2/user_item_feature_wide_quality_report.json`。
+
+阶段二中间表、八张特征表和初版宽表的全部相关测试结果：`15 passed in 7.71s`。
+
 ## 全仓库回归说明
 
-执行 `python -m pytest -q` 的结果为 `49 passed, 2 failed in 66.35s`。两个失败均来自阶段一 EDA 看板测试，原因是当前环境缺少 `plotly`：
+执行 `python -m pytest -q` 的结果为 `52 passed, 2 failed in 46.27s`。两个失败均来自阶段一 EDA 看板测试，原因是当前环境缺少 `plotly`：
 
 - `tests/functional/test_eda_dashboard.py::test_dashboard_app_smoke_run`
 - `tests/performance/test_eda_dashboard_performance.py::test_eda_dashboard_startup_performance`
@@ -92,4 +138,4 @@ python -m pytest tests/performance/test_feature_engineering_performance.py -q -s
 
 ## 结论
 
-八张特征表已由同一脚本生成，并通过时间窗口、主键、统计口径和未来信息泄露检查。前四张与后四张的接口、字段文档、功能测试和性能测试现已统一，不包含阶段三内容。
+八张特征表已由同一脚本生成并通过检查，用户—商品初版特征宽表也已完成合并和质量验证。阶段二产物不包含标签、模型、采样、模型评估或最终入模特征筛选。

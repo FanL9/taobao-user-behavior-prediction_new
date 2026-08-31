@@ -34,4 +34,19 @@ time_behavior_features.parquet
 conversion_chain_features.parquet
 ```
 
-两个命令均支持 `--input <clean-parquet>` 和 `--output-dir <output-directory>`。阶段二命令不生成标签、模型、采样结果或最终特征宽表。
+上述两个独立表生成命令均支持 `--input <clean-parquet>` 和 `--output-dir <output-directory>`，且不生成标签、模型或采样结果。
+
+## 用户—商品特征宽表
+
+```bash
+python scripts/build_user_item_feature_wide.py
+```
+
+默认读取 `data/features/` 下的八张特征表，输出：
+
+```text
+data/features/user_item_feature_wide.parquet
+reports/stage2/user_item_feature_wide_quality_report.json
+```
+
+可使用 `--features-dir`、`--output`、`--quality-report` 和 `--batch-size` 覆盖默认参数。该命令只合并初版宽表，不生成标签，不训练或评估模型，不采样，也不筛选最终入模字段。

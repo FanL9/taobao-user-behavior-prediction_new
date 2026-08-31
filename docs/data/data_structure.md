@@ -61,4 +61,10 @@
 | `data/features/time_behavior_features.parquet` | 日期—小时行为统计特征 |
 | `data/features/conversion_chain_features.parquet` | 商品历史转化链路特征 |
 
+## 阶段二初版宽表
+
+| 文件 | 简短说明 |
+| --- | --- |
+| `data/features/user_item_feature_wide.parquet` | 八张特征表合成的用户—商品粒度初版特征宽表 |
+
 禁止使用 `git add -f`、Git LFS 或修改忽略规则将任何 `data/` 数据文件上传到 GitHub。

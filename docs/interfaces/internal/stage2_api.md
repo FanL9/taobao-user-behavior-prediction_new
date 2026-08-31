@@ -40,4 +40,23 @@ build_conversion_chain_features(item_behavior) -> DataFrame
 - 类目和时间接口使用商品行为表中的窗口元数据，确保八张表窗口一致。
 - `build_feature_tables` 和 `generate_feature_tables` 作为只生成前四张的兼容接口保留。
 
-所有接口均不生成 `label`、不采样、不训练模型，也不合并最终宽表。
+上述中间表和八表接口均不生成 `label`、不采样、不训练模型，也不执行宽表合并。
+
+## 用户—商品特征宽表接口
+
+```python
+merge_user_item_feature_batch(sequence_batch, lookups) -> DataFrame
+generate_user_item_feature_wide(
+    feature_directory,
+    output_parquet,
+    quality_report_path,
+    batch_size=200_000,
+) -> dict
+feature_role_mapping(columns) -> dict[str, list[str]]
+```
+
+- `merge_user_item_feature_batch`：按用户、商品、类目和最后行为日期—小时合并一个序列表批次。
+- `generate_user_item_feature_wide`：分批读取八张特征表，原子写出用户—商品宽表及质量报告。
+- `feature_role_mapping`：区分主键、追踪、候选特征和禁止直接入模字段。
+
+宽表接口不生成 `label`，不训练或评估模型，不采样，也不执行最终入模特征筛选。
