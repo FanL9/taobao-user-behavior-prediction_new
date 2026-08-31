@@ -44,3 +44,43 @@ generate_feature_tables(input_parquet, output_directory, windows=HISTORY_WINDOWS
 ```
 
 读取 clean Parquet 并原子写入四张特征表。该接口不生成其余四张特征表、标签或最终宽表。
+
+## 后四张特征表接口
+
+### uild_item_popularity_features
+
+uild_item_popularity_features(item_behavior) 基于商品行为特征表生成商品热度特征，粒度为 dataset_split + item_id，排名只在各自 dataset_split 内计算。
+
+### uild_category_behavior_features
+
+uild_category_behavior_features(clean_data, item_behavior) 生成类目行为特征，粒度为 dataset_split + category_id。
+
+### uild_time_behavior_features
+
+uild_time_behavior_features(clean_data, item_behavior) 生成时间行为特征，粒度为 dataset_split + behavior_date + behavior_hour，只输出历史窗口内实际出现的日期—小时组合。
+
+### uild_conversion_chain_features
+
+uild_conversion_chain_features(item_behavior) 生成商品粒度转化链路特征：
+
+- uy_per_pv = item_buy_count / item_pv_count
+- uy_per_fav = item_buy_count / item_fav_count
+- uy_per_cart = item_buy_count / item_cart_count
+
+分母为 0 时结果为缺失值，不进行平滑。
+
+### uild_assigned_feature_tables
+
+uild_assigned_feature_tables(clean_data, item_behavior) 一次返回后四张特征表：item_popularity、category_behavior、	ime_behavior、conversion_chain。
+
+## 八张特征表统一接口
+
+### uild_all_feature_tables
+
+uild_all_feature_tables(clean_data, *args, **kwargs) 在现有前四张特征表基础上追加后四张，统一返回八张阶段二特征表。
+
+### generate_all_feature_tables
+
+generate_all_feature_tables(input_parquet, output_directory, *args, **kwargs) 读取 clean Parquet，并原子写出完整八张阶段二特征表。
+
+前四张兼容接口 uild_feature_tables 和 generate_feature_tables 继续保留；完整阶段二八张特征表应使用 uild_all_feature_tables 或 generate_all_feature_tables。
