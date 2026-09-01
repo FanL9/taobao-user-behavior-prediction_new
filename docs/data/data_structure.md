@@ -10,9 +10,9 @@
 | `data/processed/` | 完成清洗和标准化的数据 |
 | `data/EDA/` | 阶段一 EDA 统计输出 |
 | `data/interim/` | 阶段二四张基础中间表 |
-| `data/features/` | 后续特征工程输出 |
+| `data/features/` | 阶段二特征表和用户—商品初版特征宽表 |
 | `data/sample/` | 调试和快速验证用样例数据 |
-| `data/splits/` | 后续训练、验证和测试数据 |
+| `data/splits/` | 阶段三带标签用户—商品样本及后续数据划分结果 |
 | `data/predictions/` | 后续模型预测结果 |
 
 ## Raw 与 processed 数据
@@ -66,5 +66,14 @@
 | 文件 | 简短说明 |
 | --- | --- |
 | `data/features/user_item_feature_wide.parquet` | 八张特征表合成的用户—商品粒度初版特征宽表 |
+
+## 阶段三带标签样本
+
+| 文件 | 简短说明 |
+| --- | --- |
+| `data/splits/user_item_feature_wide_labeled.parquet` | 保留阶段二初版特征宽表全部字段，并追加未来 1 天购买 `label` 的用户—商品样本 |
+| `data/splits/user_item_feature_wide_labeled_train.parquet` | 训练集：特征窗口 2025-11-18 至 2025-12-07，标签日 2025-12-08 |
+| `data/splits/user_item_feature_wide_labeled_validation.parquet` | 验证集：特征窗口 2025-12-09 至 2025-12-14，标签日 2025-12-15 |
+| `data/splits/user_item_feature_wide_labeled_test.parquet` | 测试集：特征窗口 2025-12-16 至 2025-12-17，标签日 2025-12-18 |
 
 禁止使用 `git add -f`、Git LFS 或修改忽略规则将任何 `data/` 数据文件上传到 GitHub。

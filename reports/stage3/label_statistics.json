@@ -1,0 +1,66 @@
+{
+  "generated_at_utc": "2026-09-01T02:36:40.073805+00:00",
+  "status": "passed",
+  "inputs": {
+    "feature_wide_parquet": "D:\\taobao-user-behavior-prediction_new\\data\\features\\user_item_feature_wide.parquet",
+    "clean_behavior_parquet": "D:\\taobao-user-behavior-prediction_new\\data\\processed\\user_behavior_clean.parquet"
+  },
+  "output_parquet": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled.parquet",
+  "label_definition": {
+    "sample_grain": "user_id + item_id",
+    "target": "purchase on the configured next-day label_date",
+    "positive_rule": "behavior_type == 4 on label_date",
+    "negative_rule": "no behavior_type == 4 on label_date"
+  },
+  "statistics": {
+    "overall": {
+      "sample_count": 4384645,
+      "positive_count": 2397,
+      "negative_count": 4382248,
+      "positive_ratio": 0.0005466805180350975
+    },
+    "by_split": {
+      "train": {
+        "sample_count": 2944576,
+        "positive_count": 895,
+        "negative_count": 2943681,
+        "positive_ratio": 0.0003039486839531396
+      },
+      "validation": {
+        "sample_count": 1110131,
+        "positive_count": 886,
+        "negative_count": 1109245,
+        "positive_ratio": 0.0007981040075450555
+      },
+      "test": {
+        "sample_count": 329938,
+        "positive_count": 616,
+        "negative_count": 329322,
+        "positive_ratio": 0.0018670174396401749
+      }
+    }
+  },
+  "data_leakage_checks": {
+    "status": "passed",
+    "feature_and_label_window_overlap_rows": 0,
+    "window_metadata_mismatch_rows": 0,
+    "label_window_used_for_feature_calculation": false,
+    "label_source_columns": [
+      "user_id",
+      "item_id",
+      "behavior_type",
+      "behavior_date"
+    ],
+    "feature_columns_modified": [],
+    "output_columns_added": [
+      "label"
+    ]
+  },
+  "performance": {
+    "runtime_seconds": 42.705222,
+    "process_cpu_time_seconds": 43.421875,
+    "peak_process_rss_bytes": 1450725376,
+    "gpu_used": false,
+    "output_file_size_bytes": 172684985
+  }
+}

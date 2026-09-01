@@ -9,3 +9,16 @@ __all__ = [
     "convert_csv_to_parquet",
     "write_quality_report",
 ]
+"""Data ingestion, cleaning, and dataset-partition interfaces."""
+
+from .dataset_splits import (
+    DATASET_FILENAMES,
+    SPLIT_REPORT_FILENAME,
+    generate_time_ordered_datasets,
+)
+
+__all__ = [
+    "DATASET_FILENAMES",
+    "SPLIT_REPORT_FILENAME",
+    "generate_time_ordered_datasets",
+]

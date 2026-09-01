@@ -1,0 +1,78 @@
+{
+  "generated_at_utc": "2026-09-01T03:03:10.217921+00:00",
+  "status": "passed",
+  "input_labeled_parquet": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled.parquet",
+  "output_datasets": {
+    "train": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_train.parquet",
+    "validation": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_validation.parquet",
+    "test": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_test.parquet"
+  },
+  "statistics": {
+    "overall": {
+      "sample_count": 4384645,
+      "positive_count": 2397,
+      "negative_count": 4382248,
+      "positive_ratio": 0.0005466805180350975
+    },
+    "by_split": {
+      "train": {
+        "sample_count": 2944576,
+        "positive_count": 895,
+        "negative_count": 2943681,
+        "positive_ratio": 0.0003039486839531396
+      },
+      "validation": {
+        "sample_count": 1110131,
+        "positive_count": 886,
+        "negative_count": 1109245,
+        "positive_ratio": 0.0007981040075450555
+      },
+      "test": {
+        "sample_count": 329938,
+        "positive_count": 616,
+        "negative_count": 329322,
+        "positive_ratio": 0.0018670174396401749
+      }
+    }
+  },
+  "time_window_checks": {
+    "status": "passed",
+    "partition_column": "dataset_split",
+    "random_split_used": false,
+    "dataset_order": [
+      "train",
+      "validation",
+      "test"
+    ],
+    "feature_and_label_window_overlap_rows": 0,
+    "window_metadata_mismatch_rows": 0,
+    "windows": {
+      "train": {
+        "history_start": "2025-11-18",
+        "history_end": "2025-12-07",
+        "label_date": "2025-12-08"
+      },
+      "validation": {
+        "history_start": "2025-12-09",
+        "history_end": "2025-12-14",
+        "label_date": "2025-12-15"
+      },
+      "test": {
+        "history_start": "2025-12-16",
+        "history_end": "2025-12-17",
+        "label_date": "2025-12-18"
+      }
+    }
+  },
+  "performance": {
+    "runtime_seconds": 23.451965,
+    "process_cpu_time_seconds": 29.921875,
+    "peak_process_rss_bytes": 2020827136,
+    "gpu_used": false,
+    "output_file_size_bytes": {
+      "train": 120660794,
+      "validation": 41363791,
+      "test": 10713971
+    }
+  }
+}
