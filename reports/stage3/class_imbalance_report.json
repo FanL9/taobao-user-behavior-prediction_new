@@ -1,0 +1,95 @@
+{
+  "generated_at_utc": "2026-09-02T07:49:37.036441+00:00",
+  "status": "passed",
+  "original_statistics": {
+    "train": {
+      "sample_count": 2944576,
+      "negative_count": 2943681,
+      "positive_count": 895,
+      "positive_ratio": 0.0003039486839531396
+    },
+    "validation": {
+      "sample_count": 1110131,
+      "negative_count": 1109245,
+      "positive_count": 886,
+      "positive_ratio": 0.0007981040075450555
+    },
+    "test": {
+      "sample_count": 329938,
+      "negative_count": 329322,
+      "positive_count": 616,
+      "positive_ratio": 0.0018670174396401749
+    }
+  },
+  "training_strategy_statistics": {
+    "baseline": {
+      "sample_count": 2944576,
+      "negative_count": 2943681,
+      "positive_count": 895,
+      "positive_ratio": 0.0003039486839531396
+    },
+    "smote": {
+      "sample_count": 5887362,
+      "negative_count": 2943681,
+      "positive_count": 2943681,
+      "positive_ratio": 0.5,
+      "synthetic_count": 2942786
+    },
+    "undersampled": {
+      "sample_count": 1790,
+      "negative_count": 895,
+      "positive_count": 895,
+      "positive_ratio": 0.5
+    },
+    "class_weight": {
+      "sample_count": 2944576,
+      "negative_count": 2943681,
+      "positive_count": 895,
+      "positive_ratio": 0.0003039486839531396
+    }
+  },
+  "validation_test_statistics": {
+    "validation": {
+      "sample_count": 1110131,
+      "negative_count": 1109245,
+      "positive_count": 886,
+      "positive_ratio": 0.0007981040075450555
+    },
+    "test": {
+      "sample_count": 329938,
+      "negative_count": 329322,
+      "positive_count": 616,
+      "positive_ratio": 0.0018670174396401749
+    }
+  },
+  "checks": {
+    "status": "passed",
+    "sampling_fitted_on_train_only": true,
+    "validation_sampled": false,
+    "test_sampled": false,
+    "baseline_preserved": true,
+    "random_state": 42,
+    "smote_k_neighbors": 5,
+    "synthetic_tracking_value": -1,
+    "tracking_target_and_origin_excluded_from_model_input": [
+      "user_id",
+      "item_id",
+      "category_id",
+      "label",
+      "is_synthetic"
+    ]
+  },
+  "performance": {
+    "runtime_seconds": 41.543707,
+    "process_cpu_time_seconds": 43.65625,
+    "peak_process_rss_bytes": 1250488320,
+    "gpu_used": false,
+    "output_file_size_bytes": {
+      "train_baseline": 90455695,
+      "train_smote": 510009172,
+      "train_undersampled": 618612,
+      "validation_original": 31225705,
+      "test_original": 8069597
+    }
+  }
+}

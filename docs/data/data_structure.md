@@ -75,5 +75,16 @@
 | `data/splits/user_item_feature_wide_labeled_train.parquet` | 训练集：特征窗口 2025-11-18 至 2025-12-07，标签日 2025-12-08 |
 | `data/splits/user_item_feature_wide_labeled_validation.parquet` | 验证集：特征窗口 2025-12-09 至 2025-12-14，标签日 2025-12-15 |
 | `data/splits/user_item_feature_wide_labeled_test.parquet` | 测试集：特征窗口 2025-12-16 至 2025-12-17，标签日 2025-12-18 |
+| `data/splits/user_item_feature_wide_labeled_train_preprocessed.parquet` | 仅用训练集拟合规则处理后的训练集 |
+| `data/splits/user_item_feature_wide_labeled_validation_preprocessed.parquet` | 复用训练集规则处理后的验证集 |
+| `data/splits/user_item_feature_wide_labeled_test_preprocessed.parquet` | 复用训练集规则处理后的测试集 |
+| `data/splits/user_item_feature_wide_labeled_train_preprocessed_selected.parquet` | 应用最终入模特征清单后的训练集 |
+| `data/splits/user_item_feature_wide_labeled_validation_preprocessed_selected.parquet` | 应用训练集最终特征清单后的验证集 |
+| `data/splits/user_item_feature_wide_labeled_test_preprocessed_selected.parquet` | 应用训练集最终特征清单后的测试集 |
+| `data/splits/user_item_feature_wide_labeled_train_preprocessed_selected_baseline.parquet` | 原始未采样训练集基线版本 |
+| `data/splits/user_item_feature_wide_labeled_train_preprocessed_selected_smote.parquet` | 仅训练集进行 SMOTE 后的平衡版本 |
+| `data/splits/user_item_feature_wide_labeled_train_preprocessed_selected_undersampled.parquet` | 仅训练集进行随机欠采样后的平衡版本 |
+| `data/splits/user_item_feature_wide_labeled_validation_preprocessed_selected_original.parquet` | 保持原始分布的验证集版本 |
+| `data/splits/user_item_feature_wide_labeled_test_preprocessed_selected_original.parquet` | 保持原始分布的测试集版本 |
 
 禁止使用 `git add -f`、Git LFS 或修改忽略规则将任何 `data/` 数据文件上传到 GitHub。

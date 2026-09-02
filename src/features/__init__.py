@@ -32,6 +32,18 @@ from .labels import (
     LABEL_REPORT_FILENAME,
     generate_purchase_labels,
 )
+from .preprocessing import (
+    PREPROCESSED_FILENAMES,
+    PREPROCESSING_REPORT_FILENAME,
+    PREPROCESSING_RULES_FILENAME,
+    preprocess_feature_datasets,
+)
+from .feature_selection import (
+    FEATURE_SELECTION_REPORT_FILENAME,
+    FINAL_FEATURE_LIST_FILENAME,
+    SELECTED_FILENAMES,
+    select_model_features,
+)
 
 __all__ = [
     "HISTORY_WINDOWS",
@@ -42,6 +54,12 @@ __all__ = [
     "WIDE_TABLE_FILENAME",
     "LABELED_SAMPLE_FILENAME",
     "LABEL_REPORT_FILENAME",
+    "PREPROCESSED_FILENAMES",
+    "PREPROCESSING_REPORT_FILENAME",
+    "PREPROCESSING_RULES_FILENAME",
+    "FEATURE_SELECTION_REPORT_FILENAME",
+    "FINAL_FEATURE_LIST_FILENAME",
+    "SELECTED_FILENAMES",
     "build_all_feature_tables",
     "build_category_behavior_features",
     "build_conversion_chain_features",
@@ -57,4 +75,6 @@ __all__ = [
     "generate_user_item_feature_wide",
     "merge_user_item_feature_batch",
     "generate_purchase_labels",
+    "preprocess_feature_datasets",
+    "select_model_features",
 ]

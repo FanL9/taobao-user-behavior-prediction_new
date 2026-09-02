@@ -4,7 +4,7 @@
 
 ## 1. 项目目标
 
-使用历史浏览、收藏、加购和购买事件，构建可复现的数据处理、特征工程与购买预测流程。阶段一完成数据接入、质量检查和标准清洗；阶段二生成基础中间表、八张独立特征表和用户—商品初版特征宽表；阶段三基于固定标签日生成未来 1 天购买标签；模型训练、评估及预测由后续任务负责。
+使用历史浏览、收藏、加购和购买事件，构建可复现的数据处理、特征工程与购买预测流程。阶段一完成数据接入、质量检查和标准清洗；阶段二生成基础中间表、八张独立特征表和用户—商品初版特征宽表；阶段三完成标签生成、数据集划分、特征预处理、特征筛选和类别不平衡处理；模型训练、评估及预测由后续任务负责。
 
 ## 2. 阶段一输入
 
@@ -62,7 +62,13 @@
 
 标签日固定为训练集 `2025-12-08`、验证集 `2025-12-15`、测试集 `2025-12-18`。标签日数据只能用于目标匹配，不能参与特征计算。
 
-带标签宽表必须按既有 `dataset_split` 固定划分为训练、验证和测试集，分别对应 `2025-11-18` 至 `2025-12-07`、`2025-12-09` 至 `2025-12-14`、`2025-12-16` 至 `2025-12-17` 的特征窗口；禁止随机划分。阶段三标签与数据集划分均不做特征预处理、特征筛选、采样、模型训练或模型评估。
+带标签宽表必须按既有 `dataset_split` 固定划分为训练、验证和测试集，分别对应 `2025-11-18` 至 `2025-12-07`、`2025-12-09` 至 `2025-12-14`、`2025-12-16` 至 `2025-12-17` 的特征窗口；禁止随机划分。
+
+特征预处理仅使用训练集拟合规则：数值缺失值用训练集均值填充并以训练集统计量标准化，类别字段按训练集编码，验证集和测试集只能复用这些规则。`user_id`、`item_id`、`category_id` 只用于追踪，`label` 只作为监督目标；二者均不得作为模型输入。`dataset_split`、窗口字段和直接时间戳字段不得作为模型输入。
+
+特征筛选仅基于预处理后的训练集确定：检查缺失率、低方差、高相关、非有限值、异常值比例和疑似未来信息泄露字段，输出最终入模特征清单及删除原因。验证集和测试集只应用训练集确定的清单。
+
+类别不平衡处理仅作用于训练集：保留原始未采样训练集，构建 SMOTE 过采样和随机欠采样训练集，并输出不改变样本数的类别权重配置。验证集和测试集必须保持原始分布。是否采用某一方案由后续模型在验证集上的结果决定；阶段三不训练模型或做模型评估。
 
 ## 3. 产物与职责
 
@@ -78,6 +84,9 @@
 | 用户—商品初版特征宽表 | `data/features/user_item_feature_wide.parquet` | 合并八张特征表，不包含标签和最终入模筛选 |
 | 带标签用户—商品特征宽表 | `data/splits/user_item_feature_wide_labeled.parquet` | 保留初版特征宽表全部字段并新增未来 1 天购买标签 `label` |
 | 训练、验证、测试集 | `data/splits/user_item_feature_wide_labeled_{train,validation,test}.parquet` | 按固定时间窗口从带标签宽表确定性划分的三个数据集 |
+| 预处理训练、验证、测试集 | `data/splits/user_item_feature_wide_labeled_{train,validation,test}_preprocessed.parquet` | 使用训练集拟合规则预处理后的三个数据集 |
+| 筛选后训练、验证、测试集 | `data/splits/user_item_feature_wide_labeled_{train,validation,test}_preprocessed_selected.parquet` | 应用训练集最终特征清单后的三个数据集 |
+| 不平衡处理训练方案 | `data/splits/user_item_feature_wide_labeled_train_preprocessed_selected_{baseline,smote,undersampled}.parquet` | 原始基线、SMOTE 和欠采样三种训练数据版本 |
 | 阶段一测试结果 | `reports/stage1/stage1_test_results.md` | 阶段一功能与性能测试结果 |
 | 阶段二测试结果 | `reports/stage2/` | 中间表、八张特征表和初版宽表的功能、性能及质量记录 |
 | 阶段三标签报告 | `reports/stage3/` | 标签统计、数据泄露检查和功能、性能测试记录 |
@@ -86,7 +95,7 @@ CSV→Parquet 的职责仅为：校验表头、按声明类型解析、分块写
 
 阶段二通过 `scripts/build_stage2_intermediate_tables.py` 生成四张中间表，通过 `scripts/build_stage2_feature_tables.py` 统一生成八张特征表，再通过 `scripts/build_user_item_feature_wide.py` 合成用户—商品初版特征宽表。宽表口径见 `docs/stage2/user_item_feature_wide.md`。
 
-阶段三通过 `scripts/generate_purchase_labels.py` 为初版宽表追加未来 1 天购买标签，再通过 `scripts/split_labeled_datasets.py` 按固定时间窗口生成训练、验证和测试集。标签口径见 `docs/stage3/purchase_label_generation.md`，数据集划分口径见 `docs/stage3/dataset_split_generation.md`。
+阶段三通过 `scripts/generate_purchase_labels.py` 为初版宽表追加未来 1 天购买标签，再通过 `scripts/split_labeled_datasets.py` 按固定时间窗口生成训练、验证和测试集，通过 `scripts/preprocess_features.py` 拟合训练集预处理规则并复用到验证和测试集，通过 `scripts/select_features.py` 确定最终入模特征清单，最后通过 `scripts/prepare_class_imbalance.py` 准备不同的训练不平衡处理方案。标签口径见 `docs/stage3/purchase_label_generation.md`，数据集划分口径见 `docs/stage3/dataset_split_generation.md`，预处理口径见 `docs/stage3/feature_preprocessing.md`，筛选口径见 `docs/stage3/feature_selection.md`，类别不平衡口径见 `docs/stage3/class_imbalance.md`。
 
 ## 4. SQLite 对象
 

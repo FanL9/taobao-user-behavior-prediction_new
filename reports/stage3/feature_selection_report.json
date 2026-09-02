@@ -1,0 +1,331 @@
+{
+  "generated_at_utc": "2026-09-02T03:25:42.743014+00:00",
+  "status": "passed",
+  "input_datasets": {
+    "train": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_train_preprocessed.parquet",
+    "validation": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_validation_preprocessed.parquet",
+    "test": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_test_preprocessed.parquet"
+  },
+  "output_datasets": {
+    "train": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_train_preprocessed_selected.parquet",
+    "validation": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_validation_preprocessed_selected.parquet",
+    "test": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_test_preprocessed_selected.parquet"
+  },
+  "feature_statistics": {
+    "training_sample_count": 2944576,
+    "candidate_feature_count": 54,
+    "selected_feature_count": 37,
+    "removed_feature_count": 17,
+    "missing_rates": {
+      "last_behavior_hour": 0.0,
+      "last_behavior_days_ago": 0.0,
+      "user_event_count": 0.0,
+      "user_pv_count": 0.0,
+      "user_fav_count": 0.0,
+      "user_cart_count": 0.0,
+      "user_buy_count": 0.0,
+      "user_window_days": 0.0,
+      "user_active_day_count": 0.0,
+      "user_active_day_ratio": 0.0,
+      "user_avg_daily_event_count": 0.0,
+      "user_avg_active_day_event_count": 0.0,
+      "user_days_since_last_event": 0.0,
+      "user_unique_item_count": 0.0,
+      "user_unique_category_count": 0.0,
+      "user_pv_count_per_day": 0.0,
+      "user_fav_count_per_day": 0.0,
+      "user_cart_count_per_day": 0.0,
+      "user_buy_count_per_day": 0.0,
+      "item_total_count": 0.0,
+      "item_pv_count": 0.0,
+      "item_fav_count": 0.0,
+      "item_cart_count": 0.0,
+      "item_buy_count": 0.0,
+      "item_unique_user_count": 0.0,
+      "item_unique_buyer_count": 0.0,
+      "item_active_day_count": 0.0,
+      "item_total_count_rank": 0.0,
+      "item_unique_user_count_rank": 0.0,
+      "item_active_day_count_rank": 0.0,
+      "item_buy_count_rank": 0.0,
+      "buy_per_pv": 0.0,
+      "buy_per_fav": 0.0,
+      "buy_per_cart": 0.0,
+      "category_active_day_count": 0.0,
+      "category_buy_count": 0.0,
+      "category_cart_count": 0.0,
+      "category_fav_count": 0.0,
+      "category_pv_count": 0.0,
+      "category_total_count": 0.0,
+      "category_unique_item_count": 0.0,
+      "category_unique_user_count": 0.0,
+      "time_buy_count": 0.0,
+      "time_cart_count": 0.0,
+      "time_fav_count": 0.0,
+      "time_pv_count": 0.0,
+      "time_total_count": 0.0,
+      "time_unique_category_count": 0.0,
+      "time_unique_item_count": 0.0,
+      "time_unique_user_count": 0.0,
+      "time_weekday": 0.0,
+      "last_behavior_type_code": 0.0,
+      "last_10_behavior_sequence_code": 0.0,
+      "user_activity_level_code": 0.0
+    },
+    "variances": {
+      "last_behavior_hour": 0.9999999920303064,
+      "last_behavior_days_ago": 0.9999999979178559,
+      "user_event_count": 1.000000004097817,
+      "user_pv_count": 1.0000000196016856,
+      "user_fav_count": 0.9999999972259596,
+      "user_cart_count": 0.9999999900447597,
+      "user_buy_count": 0.9999999678065674,
+      "user_window_days": 0.0,
+      "user_active_day_count": 1.0000000385213998,
+      "user_active_day_ratio": 1.0000000385213998,
+      "user_avg_daily_event_count": 1.000000004097817,
+      "user_avg_active_day_event_count": 0.9999999896826931,
+      "user_days_since_last_event": 0.9999999985511873,
+      "user_unique_item_count": 1.0000000255151271,
+      "user_unique_category_count": 0.9999999837284049,
+      "user_pv_count_per_day": 1.0000000196016856,
+      "user_fav_count_per_day": 0.9999999972259596,
+      "user_cart_count_per_day": 0.9999999900447597,
+      "user_buy_count_per_day": 0.9999999678065674,
+      "item_total_count": 1.0000000005712288,
+      "item_pv_count": 0.9999999982982039,
+      "item_fav_count": 1.0000000352805047,
+      "item_cart_count": 1.0000000100388466,
+      "item_buy_count": 0.9999999849955141,
+      "item_unique_user_count": 1.0000000077235265,
+      "item_unique_buyer_count": 1.000000005575528,
+      "item_active_day_count": 1.0000000052844777,
+      "item_total_count_rank": 1.0000000002665308,
+      "item_unique_user_count_rank": 0.9999999955180879,
+      "item_active_day_count_rank": 1.0000000052844777,
+      "item_buy_count_rank": 0.9999999849955141,
+      "buy_per_pv": 0.9999999765737982,
+      "buy_per_fav": 1.0000000007552803,
+      "buy_per_cart": 1.0000000196405132,
+      "category_active_day_count": 1.0000000083035223,
+      "category_buy_count": 0.9999999730912972,
+      "category_cart_count": 0.9999999747311945,
+      "category_fav_count": 1.0000000078137925,
+      "category_pv_count": 0.9999999996814721,
+      "category_total_count": 0.9999999812711426,
+      "category_unique_item_count": 0.9999999908443894,
+      "category_unique_user_count": 1.000000002964295,
+      "time_buy_count": 1.0000000004784337,
+      "time_cart_count": 1.0000000099161996,
+      "time_fav_count": 1.0000000024603426,
+      "time_pv_count": 0.9999999969632883,
+      "time_total_count": 1.0000000013916142,
+      "time_unique_category_count": 0.9999999974450896,
+      "time_unique_item_count": 0.9999999939326175,
+      "time_unique_user_count": 1.0000000025887104,
+      "time_weekday": 0.9999999997335339,
+      "last_behavior_type_code": 0.15614203015497452,
+      "last_10_behavior_sequence_code": 827182.1290521789,
+      "user_activity_level_code": 0.862794124361078
+    },
+    "outlier_rates_abs_zscore_above_5": {
+      "last_behavior_hour": 0.0,
+      "last_behavior_days_ago": 0.0,
+      "user_event_count": 0.008277252820100415,
+      "user_pv_count": 0.008277252820100415,
+      "user_fav_count": 0.006910332760981547,
+      "user_cart_count": 0.005344063118085592,
+      "user_buy_count": 0.0027820643787085137,
+      "user_window_days": 0.0,
+      "user_active_day_count": 0.0,
+      "user_active_day_ratio": 0.0,
+      "user_avg_daily_event_count": 0.008277252820100415,
+      "user_avg_active_day_event_count": 0.00879549381642722,
+      "user_days_since_last_event": 0.007526380708122324,
+      "user_unique_item_count": 0.006297680888521811,
+      "user_unique_category_count": 0.003696966897780869,
+      "user_pv_count_per_day": 0.008277252820100415,
+      "user_fav_count_per_day": 0.006910332760981547,
+      "user_cart_count_per_day": 0.005344063118085592,
+      "user_buy_count_per_day": 0.0027820643787085137,
+      "item_total_count": 0.0066644569540742025,
+      "item_pv_count": 0.006569366863005064,
+      "item_fav_count": 0.007695165619770045,
+      "item_cart_count": 0.008434491077832599,
+      "item_buy_count": 0.006373413353909018,
+      "item_unique_user_count": 0.006869919472277163,
+      "item_unique_buyer_count": 0.0074852882044817316,
+      "item_active_day_count": 0.0,
+      "item_total_count_rank": 0.009571836488513117,
+      "item_unique_user_count_rank": 0.00905087863244148,
+      "item_active_day_count_rank": 0.0,
+      "item_buy_count_rank": 0.006373413353909018,
+      "buy_per_pv": 0.005427266947771088,
+      "buy_per_fav": 0.007286957443108957,
+      "buy_per_cart": 0.006588724488686996,
+      "category_active_day_count": 0.01329325512399748,
+      "category_buy_count": 0.0,
+      "category_cart_count": 0.0,
+      "category_fav_count": 0.0,
+      "category_pv_count": 0.0,
+      "category_total_count": 0.0,
+      "category_unique_item_count": 0.0,
+      "category_unique_user_count": 0.0,
+      "time_buy_count": 0.0,
+      "time_cart_count": 0.0,
+      "time_fav_count": 0.0,
+      "time_pv_count": 0.0,
+      "time_total_count": 0.0,
+      "time_unique_category_count": 0.0,
+      "time_unique_item_count": 0.0,
+      "time_unique_user_count": 0.0,
+      "time_weekday": 0.0,
+      "last_behavior_type_code": 0.0,
+      "last_10_behavior_sequence_code": 0.9992256949727227,
+      "user_activity_level_code": 0.0
+    }
+  },
+  "selected_features": [
+    "last_behavior_hour",
+    "last_behavior_days_ago",
+    "user_event_count",
+    "user_fav_count",
+    "user_cart_count",
+    "user_buy_count",
+    "user_active_day_count",
+    "user_days_since_last_event",
+    "user_unique_item_count",
+    "user_unique_category_count",
+    "item_total_count",
+    "item_fav_count",
+    "item_cart_count",
+    "item_buy_count",
+    "item_unique_user_count",
+    "item_unique_buyer_count",
+    "item_active_day_count",
+    "item_total_count_rank",
+    "item_unique_user_count_rank",
+    "buy_per_pv",
+    "buy_per_fav",
+    "buy_per_cart",
+    "category_active_day_count",
+    "category_buy_count",
+    "category_cart_count",
+    "category_fav_count",
+    "category_unique_user_count",
+    "time_buy_count",
+    "time_cart_count",
+    "time_fav_count",
+    "time_pv_count",
+    "time_unique_category_count",
+    "time_unique_user_count",
+    "time_weekday",
+    "last_behavior_type_code",
+    "last_10_behavior_sequence_code",
+    "user_activity_level_code"
+  ],
+  "removed_features": {
+    "user_window_days": [
+      "low_variance"
+    ],
+    "user_pv_count": [
+      "high_correlation_with:user_event_count:abs=0.998181"
+    ],
+    "user_active_day_ratio": [
+      "high_correlation_with:user_active_day_count:abs=1.000000"
+    ],
+    "user_avg_daily_event_count": [
+      "high_correlation_with:user_event_count:abs=1.000000"
+    ],
+    "user_avg_active_day_event_count": [
+      "high_correlation_with:user_event_count:abs=0.982989"
+    ],
+    "user_pv_count_per_day": [
+      "high_correlation_with:user_event_count:abs=0.998181"
+    ],
+    "user_fav_count_per_day": [
+      "high_correlation_with:user_fav_count:abs=1.000000"
+    ],
+    "user_cart_count_per_day": [
+      "high_correlation_with:user_cart_count:abs=1.000000"
+    ],
+    "user_buy_count_per_day": [
+      "high_correlation_with:user_buy_count:abs=1.000000"
+    ],
+    "item_pv_count": [
+      "high_correlation_with:item_total_count:abs=0.999331"
+    ],
+    "item_active_day_count_rank": [
+      "high_correlation_with:item_active_day_count:abs=1.000000"
+    ],
+    "item_buy_count_rank": [
+      "high_correlation_with:item_buy_count:abs=1.000000"
+    ],
+    "category_pv_count": [
+      "high_correlation_with:category_fav_count:abs=0.990746"
+    ],
+    "category_total_count": [
+      "high_correlation_with:category_fav_count:abs=0.991402"
+    ],
+    "category_unique_item_count": [
+      "high_correlation_with:category_fav_count:abs=0.986929"
+    ],
+    "time_total_count": [
+      "high_correlation_with:time_pv_count:abs=0.999909"
+    ],
+    "time_unique_item_count": [
+      "high_correlation_with:time_pv_count:abs=0.999406"
+    ]
+  },
+  "data_leakage_check": {
+    "status": "passed",
+    "rules_fitted_on_train_only": true,
+    "validation_and_test_refit_rules": false,
+    "tracking_columns_excluded_from_model_input": [
+      "user_id",
+      "item_id",
+      "category_id"
+    ],
+    "target_excluded_from_model_input": "label",
+    "suspected_future_information_features": [],
+    "random_sampling_used": false
+  },
+  "selection_thresholds": {
+    "missing_rate_remove_above": 0.95,
+    "low_variance_remove_at_or_below": 1e-12,
+    "high_correlation_remove_at_or_above": 0.98,
+    "outlier_check_abs_zscore_above": 5.0,
+    "outlier_rate_removes_feature": false
+  },
+  "dataset_statistics": {
+    "train": {
+      "sample_count": 2944576,
+      "positive_count": 895,
+      "negative_count": 2943681,
+      "positive_ratio": 0.0003039486839531396
+    },
+    "validation": {
+      "sample_count": 1110131,
+      "positive_count": 886,
+      "negative_count": 1109245,
+      "positive_ratio": 0.0007981040075450555
+    },
+    "test": {
+      "sample_count": 329938,
+      "positive_count": 616,
+      "negative_count": 329322,
+      "positive_ratio": 0.0018670174396401749
+    }
+  },
+  "performance": {
+    "runtime_seconds": 12.128226,
+    "process_cpu_time_seconds": 15.625,
+    "peak_process_rss_bytes": 1112248320,
+    "gpu_used": false,
+    "output_file_size_bytes": {
+      "train": 90426311,
+      "validation": 31214391,
+      "test": 8066147
+    }
+  }
+}

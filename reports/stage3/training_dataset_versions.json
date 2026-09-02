@@ -1,0 +1,111 @@
+{
+  "generated_at_utc": "2026-09-02T07:49:37.036441+00:00",
+  "model_feature_columns": [
+    "last_behavior_hour",
+    "last_behavior_days_ago",
+    "user_event_count",
+    "user_fav_count",
+    "user_cart_count",
+    "user_buy_count",
+    "user_active_day_count",
+    "user_days_since_last_event",
+    "user_unique_item_count",
+    "user_unique_category_count",
+    "item_total_count",
+    "item_fav_count",
+    "item_cart_count",
+    "item_buy_count",
+    "item_unique_user_count",
+    "item_unique_buyer_count",
+    "item_active_day_count",
+    "item_total_count_rank",
+    "item_unique_user_count_rank",
+    "buy_per_pv",
+    "buy_per_fav",
+    "buy_per_cart",
+    "category_active_day_count",
+    "category_buy_count",
+    "category_cart_count",
+    "category_fav_count",
+    "category_unique_user_count",
+    "time_buy_count",
+    "time_cart_count",
+    "time_fav_count",
+    "time_pv_count",
+    "time_unique_category_count",
+    "time_unique_user_count",
+    "time_weekday",
+    "last_behavior_type_code",
+    "last_10_behavior_sequence_code",
+    "user_activity_level_code"
+  ],
+  "tracking_columns": [
+    "user_id",
+    "item_id",
+    "category_id"
+  ],
+  "target_column": "label",
+  "versions": {
+    "baseline": {
+      "path": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_train_preprocessed_selected_baseline.parquet",
+      "description": "Original unsampled training set for baseline comparison.",
+      "statistics": {
+        "sample_count": 2944576,
+        "negative_count": 2943681,
+        "positive_count": 895,
+        "positive_ratio": 0.0003039486839531396
+      }
+    },
+    "smote": {
+      "path": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_train_preprocessed_selected_smote.parquet",
+      "description": "Training-only mixed-type SMOTE balanced training set.",
+      "statistics": {
+        "sample_count": 5887362,
+        "negative_count": 2943681,
+        "positive_count": 2943681,
+        "positive_ratio": 0.5,
+        "synthetic_count": 2942786
+      }
+    },
+    "undersampled": {
+      "path": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_train_preprocessed_selected_undersampled.parquet",
+      "description": "Training-only seeded random undersampling balanced training set.",
+      "statistics": {
+        "sample_count": 1790,
+        "negative_count": 895,
+        "positive_count": 895,
+        "positive_ratio": 0.5
+      }
+    },
+    "class_weight": {
+      "config_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage3\\class_weight_config.json",
+      "description": "Balanced class weights; source rows remain unchanged.",
+      "statistics": {
+        "sample_count": 2944576,
+        "negative_count": 2943681,
+        "positive_count": 895,
+        "positive_ratio": 0.0003039486839531396
+      }
+    },
+    "validation_original": {
+      "path": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_validation_preprocessed_selected_original.parquet",
+      "description": "Unchanged validation distribution; never sampled.",
+      "statistics": {
+        "sample_count": 1110131,
+        "negative_count": 1109245,
+        "positive_count": 886,
+        "positive_ratio": 0.0007981040075450555
+      }
+    },
+    "test_original": {
+      "path": "D:\\taobao-user-behavior-prediction_new\\data\\splits\\user_item_feature_wide_labeled_test_preprocessed_selected_original.parquet",
+      "description": "Unchanged test distribution; never sampled.",
+      "statistics": {
+        "sample_count": 329938,
+        "negative_count": 329322,
+        "positive_count": 616,
+        "positive_ratio": 0.0018670174396401749
+      }
+    }
+  }
+}

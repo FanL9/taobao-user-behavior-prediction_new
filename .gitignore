@@ -41,6 +41,11 @@ artifacts/**
 experiments/runs/**
 experiments/tracking/**
 models/**
+!models/**/
+!models/**/.gitkeep
+
+# Small tracked baseline-training summary; model binaries and predictions remain local.
+!reports/stage4/baseline_model_comparison.csv
 
 # Keep the repository directory skeleton
 !.gitkeep
