@@ -1,9 +1,18 @@
-﻿import pandas as pd
-import plotly.express as px
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from data_loader import EDA_OUTPUT_DIR, load_eda_outputs
+from data_loader import (
+    EDA_OUTPUT_DIR,
+    FEATURE_OUTPUT_DIR,
+    STAGE2_DASHBOARD_STATS_DIR,
+    STAGE2_FEATURE_FILES,
+    build_stage2_dashboard_statistics,
+    get_stage2_dataset_splits,
+    load_eda_outputs,
+    load_stage2_dashboard_outputs,
+    load_stage2_feature_inventory,
+)
 
 
 st.set_page_config(
@@ -490,7 +499,13 @@ NAV_ITEMS = [
     ("categories", "04", "Top Categories", "top-10-purchased-categories"),
     ("daily", "05", "Daily Trend", "daily-behavior-trend"),
     ("hourly", "06", "Hourly Trend", "hourly-behavior-trend"),
-    ("funnel", "07", "Conversion Funnel", "conversion-funnel"),
+    ("funnel", "07", "Stage 1 Funnel", "conversion-funnel"),
+    ("chain", "08", "Stage 2 Funnel", "stage2-conversion-funnel"),
+    ("transition", "09", "Transition Matrix", "behavior-transition-matrix"),
+    ("depth", "10", "Depth & Conversion", "behavior-depth-conversion"),
+    ("activity", "11", "Activity & Conversion", "activity-conversion"),
+    ("popularity", "12", "Popularity & Conversion", "popularity-conversion"),
+    ("category-traffic", "13", "Category & Conversion", "category-traffic-conversion"),
 ]
 
 
@@ -552,9 +567,11 @@ with st.sidebar:
         Roadmap
     </div>
 
-    <div class="future-stage">
-        <strong>02</strong>
-        &nbsp; Feature Engineering
+    <div class="stage-card">
+        <span class="stage-number">02</span>
+        <span class="stage-name">
+            Feature Engineering
+        </span>
     </div>
 
     <div class="future-stage">
@@ -1278,13 +1295,440 @@ st.caption(
 )
 
 
+# ---------------------------------------------------------------------------
+# Stage 2 · Feature Engineering analysis
+# ---------------------------------------------------------------------------
 
+st.divider()
 
+st.html(
+    """
+<div id="stage2-feature-analysis"></div>
+<div class="dashboard-hero" style="margin-top: 0.8rem;">
+    <div class="hero-eyebrow">STAGE 2 · FEATURE ENGINEERING</div>
+    <h2 style="margin:0; color:#f8fafc; font-size:2rem; letter-spacing:-0.035em;">
+        Feature-to-Conversion Analysis
+    </h2>
+    <div class="hero-description" style="margin-top:0.65rem;">
+        Diagnostic views built from existing Stage 2 feature tables and
+        lightweight statistics. No model training, evaluation, label generation,
+        or raw-data cleaning is performed here.
+    </div>
+</div>
+    """
+)
 
+try:
+    stage2_splits = get_stage2_dataset_splits()
+except (FileNotFoundError, ImportError, ValueError) as exc:
+    st.warning(
+        "Stage 2 feature analysis is unavailable. "
+        "Build the Stage 2 feature tables first. "
+        f"Details: {exc}"
+    )
+    stage2 = None
+    selected_split = None
+    stage2_source_mode = None
+    stage2_inventory = None
+else:
+    try:
+        stage2_inventory = load_stage2_feature_inventory()
+    except (FileNotFoundError, ImportError, ValueError):
+        stage2_inventory = None
 
+    selected_split = st.selectbox(
+        "Stage 2 dataset split",
+        options=stage2_splits,
+        index=stage2_splits.index("train") if "train" in stage2_splits else 0,
+        key="stage2_dataset_split",
+    )
 
+    try:
+        stage2 = load_stage2_dashboard_outputs(
+            STAGE2_DASHBOARD_STATS_DIR,
+            dataset_split=selected_split,
+        )
+        stage2_source_mode = "Precomputed statistics"
+    except FileNotFoundError:
+        st.info(
+            "Precomputed Stage 2 dashboard statistics were not found. "
+            "Using a projected on-demand fallback. For faster routine startup run: "
+            "python scripts/build_stage2_dashboard_stats.py"
+        )
+        try:
+            stage2 = build_stage2_dashboard_statistics(
+                FEATURE_OUTPUT_DIR,
+                dataset_split=selected_split,
+                transition_sequence_limit=250_000,
+            )
+            stage2_source_mode = "On-demand fallback"
+        except (FileNotFoundError, ImportError, ValueError, KeyError) as exc:
+            st.warning(
+                "Stage 2 feature analysis could not be built. "
+                f"Details: {exc}"
+            )
+            stage2 = None
+            stage2_source_mode = None
 
+if stage2 is not None:
+    transition_rows = stage2["transition_matrix"]
+    sequences_scanned = (
+        int(transition_rows["sequences_scanned"].max())
+        if "sequences_scanned" in transition_rows.columns
+        and not transition_rows.empty
+        else None
+    )
 
+    status_1, status_2, status_3 = st.columns(3)
+    status_1.metric("Dataset Split", selected_split)
+    status_2.metric("Statistics Source", stage2_source_mode)
+    status_3.metric(
+        "Transition Sequences",
+        f"{sequences_scanned:,}" if sequences_scanned is not None else "Precomputed",
+    )
+
+    st.divider()
+    st.markdown('<div id="stage2-conversion-funnel"></div>', unsafe_allow_html=True)
+    st.subheader("Stage 2 Full-Chain Behavior Conversion Funnel")
+    st.caption(
+        "Aggregated from conversion_chain_features.parquet for the selected history "
+        "window. Ratios describe behavior-count relationships, not strict sequential "
+        "user-level conversion probabilities."
+    )
+
+    chain_funnel = stage2["conversion_funnel"].copy()
+    if not chain_funnel.empty:
+        chain_funnel["stage"] = pd.Categorical(
+            chain_funnel["stage"],
+            categories=["PV", "Favorite", "Cart", "Purchase"],
+            ordered=True,
+        )
+        chain_funnel = chain_funnel.sort_values("stage")
+        chain_funnel["label"] = chain_funnel.apply(
+            lambda row: (
+                f'{int(row["behavior_count"]):,}'
+                f' · {row["relative_to_pv_percentage"]:.2f}% of PV'
+            ),
+            axis=1,
+        )
+        chain_figure = px.funnel(
+            chain_funnel,
+            y="stage",
+            x="behavior_count",
+            text="label",
+            labels={"stage": "Behavior Stage", "behavior_count": "Behavior Count"},
+        )
+        chain_figure.update_traces(textposition="inside", textinfo="text")
+        st.plotly_chart(
+            chain_figure, width="stretch", config={"displayModeBar": False}
+        )
+        st.dataframe(
+            chain_funnel[
+                [
+                    "stage",
+                    "behavior_count",
+                    "relative_to_pv_percentage",
+                    "from_previous_percentage",
+                ]
+            ].rename(
+                columns={
+                    "stage": "Stage",
+                    "behavior_count": "Behavior Count",
+                    "relative_to_pv_percentage": "% of PV",
+                    "from_previous_percentage": "% of Previous Stage",
+                }
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+
+    st.divider()
+    st.markdown('<div id="behavior-transition-matrix"></div>', unsafe_allow_html=True)
+    st.subheader("Behavior Transition Probability Matrix")
+    transition_caption = (
+        "Adjacent transitions are calculated from last_10_behavior_sequence in "
+        "user_sequence_features.parquet and normalized within each source behavior."
+    )
+    if stage2_source_mode == "On-demand fallback" and sequences_scanned is not None:
+        transition_caption += (
+            f" Interactive fallback scanned the first {sequences_scanned:,} sequences; "
+            "run the statistics build script for an all-sequence matrix."
+        )
+    st.caption(transition_caption)
+
+    transition_matrix = stage2["transition_matrix"].copy()
+    if not transition_matrix.empty:
+        behavior_order = ["pv", "fav", "cart", "buy"]
+        transition_pivot = (
+            transition_matrix.pivot(
+                index="from_behavior",
+                columns="to_behavior",
+                values="transition_probability",
+            )
+            .reindex(index=behavior_order, columns=behavior_order)
+            .fillna(0.0)
+        )
+        transition_figure = px.imshow(
+            transition_pivot,
+            text_auto=".1f",
+            aspect="auto",
+            labels={
+                "x": "Next Behavior",
+                "y": "Current Behavior",
+                "color": "Transition Probability (%)",
+            },
+        )
+        transition_figure.update_xaxes(side="top")
+        st.plotly_chart(
+            transition_figure, width="stretch", config={"displayModeBar": False}
+        )
+
+    st.divider()
+    st.markdown('<div id="behavior-depth-conversion"></div>', unsafe_allow_html=True)
+    st.subheader("Behavior Depth vs. Purchase Conversion")
+    st.caption(
+        "Behavior depth is defined by the Stage 2 user event_count feature and "
+        "split into ordered quantile bands. Conversion is aggregated BUY/PV."
+    )
+
+    depth_summary = stage2["behavior_depth"].copy()
+    if not depth_summary.empty:
+        depth_order = [
+            label
+            for label in ["Very Low", "Low", "Medium", "High", "Very High", "All"]
+            if label in depth_summary["depth_band"].astype(str).tolist()
+        ]
+        depth_figure = px.bar(
+            depth_summary,
+            x="depth_band",
+            y="buy_to_pv_rate",
+            text=depth_summary["buy_to_pv_rate"].map(lambda x: f"{x:.2f}%"),
+            category_orders={"depth_band": depth_order},
+            labels={
+                "depth_band": "Behavior Depth",
+                "buy_to_pv_rate": "BUY / PV (%)",
+            },
+            hover_data={
+                "user_count": ":,",
+                "avg_event_count": ":.2f",
+                "buy_to_pv_rate": ":.2f",
+            },
+        )
+        depth_figure.update_traces(textposition="outside", cliponaxis=False)
+        depth_figure.update_layout(showlegend=False)
+        st.plotly_chart(
+            depth_figure, width="stretch", config={"displayModeBar": False}
+        )
+
+    st.divider()
+    st.markdown('<div id="activity-conversion"></div>', unsafe_allow_html=True)
+    st.subheader("User Activity vs. Purchase Conversion")
+    st.caption(
+        "Users are grouped by the Stage 2 activity_level feature. Conversion is "
+        "summarized as BUY/PV from per-day behavior features."
+    )
+
+    activity_summary = stage2["user_activity"].copy()
+    if not activity_summary.empty:
+        level_order = [
+            level for level in ["low", "medium", "high"]
+            if level in activity_summary["activity_level"].astype(str).tolist()
+        ]
+        activity_figure = px.bar(
+            activity_summary,
+            x="activity_level",
+            y="buy_to_pv_rate",
+            text=activity_summary["buy_to_pv_rate"].map(lambda x: f"{x:.2f}%"),
+            category_orders={"activity_level": level_order},
+            labels={
+                "activity_level": "Activity Level",
+                "buy_to_pv_rate": "BUY / PV (%)",
+            },
+            hover_data={
+                "user_count": ":,",
+                "avg_daily_events": ":.2f",
+                "buy_to_pv_rate": ":.2f",
+            },
+        )
+        activity_figure.update_traces(textposition="outside", cliponaxis=False)
+        activity_figure.update_layout(showlegend=False)
+        st.plotly_chart(
+            activity_figure, width="stretch", config={"displayModeBar": False}
+        )
+        st.dataframe(
+            activity_summary.rename(
+                columns={
+                    "activity_level": "Activity Level",
+                    "user_count": "Users",
+                    "avg_daily_events": "Avg Daily Events",
+                    "buy_to_pv_rate": "BUY / PV (%)",
+                }
+            )[["Activity Level", "Users", "Avg Daily Events", "BUY / PV (%)"]],
+            hide_index=True,
+            width="stretch",
+        )
+
+    st.divider()
+    st.markdown('<div id="popularity-conversion"></div>', unsafe_allow_html=True)
+    st.subheader("Item Popularity vs. Purchase Conversion")
+    st.caption(
+        "Items are bucketed by item_total_count_rank. The chart compares traffic "
+        "popularity with aggregated BUY/PV conversion."
+    )
+
+    popularity_summary = stage2["item_popularity"].copy()
+    if not popularity_summary.empty:
+        popularity_order = [
+            label
+            for label in ["Very High", "High", "Medium", "Low", "Very Low", "All"]
+            if label in popularity_summary["popularity_band"].astype(str).tolist()
+        ]
+        popularity_figure = px.bar(
+            popularity_summary,
+            x="popularity_band",
+            y="buy_to_pv_rate",
+            text=popularity_summary["buy_to_pv_rate"].map(lambda x: f"{x:.2f}%"),
+            category_orders={"popularity_band": popularity_order},
+            labels={
+                "popularity_band": "Popularity Band",
+                "buy_to_pv_rate": "BUY / PV (%)",
+            },
+            hover_data={
+                "item_count": ":,",
+                "total_events": ":,",
+                "buy_to_pv_rate": ":.2f",
+            },
+        )
+        popularity_figure.update_traces(textposition="outside", cliponaxis=False)
+        popularity_figure.update_layout(showlegend=False)
+        st.plotly_chart(
+            popularity_figure, width="stretch", config={"displayModeBar": False}
+        )
+
+        top_popular = stage2["top_items"].copy()
+        if not top_popular.empty:
+            top_popular["item_id"] = top_popular["item_id"].astype(str)
+            st.caption("Top 10 items by Stage 2 popularity rank")
+            st.dataframe(
+                top_popular[
+                    [
+                        "item_id",
+                        "item_total_count_rank",
+                        "item_total_count",
+                        "item_buy_count",
+                        "buy_to_pv_rate",
+                    ]
+                ].rename(
+                    columns={
+                        "item_id": "Item ID",
+                        "item_total_count_rank": "Popularity Rank",
+                        "item_total_count": "Total Events",
+                        "item_buy_count": "Purchases",
+                        "buy_to_pv_rate": "BUY / PV (%)",
+                    }
+                ),
+                hide_index=True,
+                width="stretch",
+            )
+
+    st.divider()
+    st.markdown(
+        '<div id="category-traffic-conversion"></div>',
+        unsafe_allow_html=True,
+    )
+    st.subheader("Category Traffic vs. Purchase Conversion")
+    st.caption(
+        "Categories are bucketed by category_total_count and compared using "
+        "aggregated BUY/PV conversion."
+    )
+
+    category_summary = stage2["category_traffic"].copy()
+    if not category_summary.empty:
+        traffic_order = [
+            label
+            for label in ["Very Low", "Low", "Medium", "High", "Very High", "All"]
+            if label in category_summary["traffic_band"].astype(str).tolist()
+        ]
+        category_figure = px.bar(
+            category_summary,
+            x="traffic_band",
+            y="buy_to_pv_rate",
+            text=category_summary["buy_to_pv_rate"].map(lambda x: f"{x:.2f}%"),
+            category_orders={"traffic_band": traffic_order},
+            labels={
+                "traffic_band": "Category Traffic Band",
+                "buy_to_pv_rate": "BUY / PV (%)",
+            },
+            hover_data={
+                "category_count": ":,",
+                "total_events": ":,",
+                "buy_to_pv_rate": ":.2f",
+            },
+        )
+        category_figure.update_traces(textposition="outside", cliponaxis=False)
+        category_figure.update_layout(showlegend=False)
+        st.plotly_chart(
+            category_figure, width="stretch", config={"displayModeBar": False}
+        )
+
+    with st.expander("Stage 2 Data Sources & Interface", expanded=False):
+        st.caption(
+            "The Stage 2 contract contains eight feature tables. Dashboard charts "
+            "read small precomputed statistics when available; otherwise they "
+            "project only required columns for the selected split."
+        )
+        st.code(FEATURE_OUTPUT_DIR.as_posix(), language=None)
+        st.code(STAGE2_DASHBOARD_STATS_DIR.as_posix(), language=None)
+
+        source_purpose = {
+            "user_basic": "Stage 2 contract / user counts",
+            "user_activity": "Behavior depth and user activity conversion",
+            "user_sequence": "Adjacent behavior transition matrix",
+            "item_behavior": "Stage 2 contract / item behavior base",
+            "item_popularity": "Item popularity conversion and top items",
+            "category_behavior": "Category traffic conversion",
+            "time_behavior": "Stage 2 contract / temporal behavior features",
+            "conversion_chain": "Full-chain behavior funnel",
+        }
+
+        if stage2_inventory is not None:
+            inventory_display = stage2_inventory.copy()
+            inventory_display["Dashboard Role"] = (
+                inventory_display["logical_table"].map(source_purpose)
+            )
+            inventory_display = inventory_display.rename(
+                columns={
+                    "logical_table": "Logical Table",
+                    "feature_file": "Feature File",
+                    "row_count": "Rows",
+                    "column_count": "Columns",
+                }
+            )
+            st.dataframe(
+                inventory_display[
+                    ["Logical Table", "Feature File", "Rows", "Columns", "Dashboard Role"]
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.dataframe(
+                [
+                    {
+                        "Logical Table": name,
+                        "Feature File": filename,
+                        "Dashboard Role": source_purpose[name],
+                    }
+                    for name, filename in STAGE2_FEATURE_FILES.items()
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+
+        st.caption(
+            "Recommended preparation command: "
+            "python scripts/build_stage2_dashboard_stats.py"
+        )
 
 st.html(
     """

@@ -1,4 +1,5 @@
-﻿import os
+import json
+import os
 import time
 from pathlib import Path
 
@@ -8,10 +9,17 @@ from streamlit.testing.v1 import AppTest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD_APP = REPO_ROOT / "dashboards" / "eda" / "app.py"
+PERFORMANCE_OUTPUT = (
+    REPO_ROOT
+    / "outputs"
+    / "performance"
+    / "runtime"
+    / "eda_dashboard_stage2_performance.json"
+)
 
 
 def test_eda_dashboard_startup_performance() -> None:
-    """Measure Stage 1 EDA dashboard startup resource usage."""
+    """Measure dashboard startup wall time, CPU usage, and memory delta."""
     process = psutil.Process(os.getpid())
 
     memory_before = process.memory_info().rss
@@ -26,29 +34,34 @@ def test_eda_dashboard_startup_performance() -> None:
     memory_after = process.memory_info().rss
 
     process_cpu_seconds = (
-        cpu_after.user
-        + cpu_after.system
-        - cpu_before.user
-        - cpu_before.system
+        cpu_after.user + cpu_after.system - cpu_before.user - cpu_before.system
     )
-
     average_cpu_percent = (
-        process_cpu_seconds / wall_seconds * 100
-        if wall_seconds > 0
-        else 0.0
+        process_cpu_seconds / wall_seconds * 100 if wall_seconds > 0 else 0.0
     )
-
     memory_delta_mb = (memory_after - memory_before) / (1024 * 1024)
+
+    result = {
+        "startup_seconds": round(wall_seconds, 4),
+        "process_cpu_seconds": round(process_cpu_seconds, 4),
+        "average_cpu_percent": round(average_cpu_percent, 2),
+        "memory_before_mb": round(memory_before / (1024 * 1024), 2),
+        "memory_after_mb": round(memory_after / (1024 * 1024), 2),
+        "memory_delta_mb": round(memory_delta_mb, 2),
+        "gpu_used": False,
+    }
+
+    PERFORMANCE_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    PERFORMANCE_OUTPUT.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     print("")
     print("===== EDA Dashboard Performance =====")
-    print(f"startup_seconds: {wall_seconds:.4f}")
-    print(f"process_cpu_seconds: {process_cpu_seconds:.4f}")
-    print(f"average_cpu_percent: {average_cpu_percent:.2f}")
-    print(f"memory_before_mb: {memory_before / (1024 * 1024):.2f}")
-    print(f"memory_after_mb: {memory_after / (1024 * 1024):.2f}")
-    print(f"memory_delta_mb: {memory_delta_mb:.2f}")
-    print("gpu_used: False")
+    for key, value in result.items():
+        print(f"{key}: {value}")
+    print(f"result_file: {PERFORMANCE_OUTPUT}")
     print("=====================================")
 
     assert not app.exception

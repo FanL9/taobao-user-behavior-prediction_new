@@ -1,4 +1,4 @@
-﻿from importlib.util import module_from_spec, spec_from_file_location
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pandas as pd
@@ -202,3 +202,146 @@ def test_dashboard_app_smoke_run() -> None:
     app.run(timeout=15)
 
     assert not app.exception
+
+
+def _write_sample_stage2_features(output_dir: Path) -> None:
+    """Create compact Stage 2 Parquet fixtures covering the dashboard contract."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    pd.DataFrame(
+        {
+            "dataset_split": ["train"] * 6 + ["validation"],
+            "user_id": [1, 2, 3, 4, 5, 6, 7],
+            "activity_level": ["low", "low", "medium", "medium", "high", "high", "low"],
+            "event_count": [4, 8, 12, 20, 40, 80, 5],
+            "avg_daily_event_count": [0.4, 0.8, 1.2, 2.0, 4.0, 8.0, 0.5],
+            "pv_count_per_day": [0.3, 0.6, 0.9, 1.4, 2.8, 5.0, 0.4],
+            "buy_count_per_day": [0.0, 0.1, 0.1, 0.2, 0.5, 1.2, 0.0],
+        }
+    ).to_parquet(output_dir / "user_activity_features.parquet", index=False)
+
+    pd.DataFrame(
+        {
+            "dataset_split": ["train"] * 10,
+            "item_id": list(range(101, 111)),
+            "item_total_count_rank": list(range(1, 11)),
+            "item_pv_count": [100, 95, 90, 80, 70, 60, 50, 40, 30, 20],
+            "item_buy_count": [10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
+            "item_total_count": [120, 114, 108, 96, 84, 72, 60, 48, 36, 24],
+        }
+    ).to_parquet(output_dir / "item_popularity_features.parquet", index=False)
+
+    pd.DataFrame(
+        {
+            "dataset_split": ["train"] * 5,
+            "category_id": [201, 202, 203, 204, 205],
+            "category_total_count": [1000, 800, 600, 400, 200],
+            "category_pv_count": [800, 650, 500, 330, 170],
+            "category_buy_count": [80, 60, 45, 25, 10],
+        }
+    ).to_parquet(output_dir / "category_behavior_features.parquet", index=False)
+
+    pd.DataFrame(
+        {
+            "dataset_split": ["train"] * 3,
+            "item_pv_count": [100, 200, 300],
+            "item_fav_count": [20, 40, 60],
+            "item_cart_count": [30, 50, 70],
+            "item_buy_count": [10, 20, 30],
+        }
+    ).to_parquet(output_dir / "conversion_chain_features.parquet", index=False)
+
+    pd.DataFrame(
+        {
+            "dataset_split": ["train"] * 5,
+            "last_10_behavior_sequence": [
+                "pv→pv→fav→cart→buy",
+                "pv→cart→buy",
+                "pv→fav→buy",
+                "fav→cart→buy",
+                "pv→buy",
+            ],
+        }
+    ).to_parquet(output_dir / "user_sequence_features.parquet", index=False)
+
+    pd.DataFrame({"dataset_split": ["train"], "user_id": [1]}).to_parquet(
+        output_dir / "user_features.parquet", index=False
+    )
+    pd.DataFrame({"dataset_split": ["train"], "item_id": [101]}).to_parquet(
+        output_dir / "item_behavior_features.parquet", index=False
+    )
+    pd.DataFrame({"dataset_split": ["train"], "behavior_hour": [12]}).to_parquet(
+        output_dir / "time_behavior_features.parquet", index=False
+    )
+
+
+def test_stage2_feature_contract_lists_all_eight_tables() -> None:
+    assert len(data_loader.STAGE2_FEATURE_FILES) == 8
+    assert set(data_loader.STAGE2_FEATURE_FILES) == {
+        "user_basic",
+        "user_activity",
+        "user_sequence",
+        "item_behavior",
+        "item_popularity",
+        "category_behavior",
+        "time_behavior",
+        "conversion_chain",
+    }
+
+
+def test_stage2_dashboard_statistics_and_precomputed_roundtrip(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
+    feature_dir = tmp_path / "features"
+    stats_dir = tmp_path / "stage2_dashboard"
+    _write_sample_stage2_features(feature_dir)
+
+    inventory = data_loader.load_stage2_feature_inventory(str(feature_dir))
+    assert len(inventory) == 8
+
+    splits = data_loader.get_stage2_dataset_splits(str(feature_dir))
+    assert splits == ["train", "validation"]
+
+    statistics = data_loader.build_stage2_dashboard_statistics(
+        output_dir=str(feature_dir),
+        dataset_split="train",
+        transition_sequence_limit=None,
+    )
+
+    assert set(statistics) == set(data_loader.STAGE2_DASHBOARD_STAT_FILES)
+    assert list(statistics["conversion_funnel"]["stage"]) == [
+        "PV", "Favorite", "Cart", "Purchase"
+    ]
+    assert float(statistics["conversion_funnel"].iloc[0]["behavior_count"]) == 600.0
+    assert len(statistics["transition_matrix"]) == 16
+    assert statistics["transition_matrix"]["transition_count"].sum() > 0
+    assert not statistics["behavior_depth"].empty
+    assert not statistics["user_activity"].empty
+    assert not statistics["item_popularity"].empty
+    assert len(statistics["top_items"]) == 10
+    assert not statistics["category_traffic"].empty
+
+    data_loader.write_stage2_dashboard_statistics(
+        {"train": statistics},
+        output_dir=str(stats_dir),
+    )
+    loaded = data_loader.load_stage2_dashboard_outputs(
+        output_dir=str(stats_dir),
+        dataset_split="train",
+    )
+    assert set(loaded) == set(statistics)
+    assert len(loaded["transition_matrix"]) == 16
+
+
+def test_stage2_projected_loader_filters_split_and_columns(tmp_path: Path) -> None:
+    pytest.importorskip("pyarrow")
+    feature_dir = tmp_path / "features"
+    _write_sample_stage2_features(feature_dir)
+
+    frame = data_loader.load_stage2_feature_table(
+        "user_activity",
+        output_dir=str(feature_dir),
+        columns=("user_id", "event_count"),
+        dataset_split="validation",
+    )
+    assert list(frame.columns) == ["user_id", "event_count"]
+    assert frame["user_id"].tolist() == [7]
