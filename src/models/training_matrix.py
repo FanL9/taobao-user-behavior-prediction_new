@@ -30,6 +30,7 @@ TRACKING_COLUMNS = ("user_id", "item_id", "category_id")
 TARGET_COLUMN = "label"
 SYNTHETIC_FLAG_COLUMN = "is_synthetic"
 MODEL_NAMES = ("logistic_regression", "random_forest", "xgboost", "lightgbm")
+TRAINING_STRATEGIES = ("baseline", "smote", "undersampled", "class_weight")
 PREDICTION_THRESHOLD = 0.5
 
 
@@ -175,7 +176,30 @@ def _write_predictions(
     output.to_parquet(target, index=False)
 
 
-def train_baseline_models(
+def _write_aggregate_comparison(report_root: Path) -> Path:
+    """Combine completed strategy comparison tables without selecting a winner."""
+
+    tables = []
+    strategy_tables = sorted(report_root.glob("baseline_model_comparison_*.csv"))
+    legacy = report_root / "baseline_model_comparison.csv"
+    # The old unsuffixed table is class_weight only; retain it solely until a
+    # matrix-generated class_weight table exists, preventing duplicate rows.
+    candidates = strategy_tables if any(path.name.endswith("_class_weight.csv") for path in strategy_tables) else [legacy, *strategy_tables]
+    for path in candidates:
+        if path.is_file():
+            tables.append(pd.read_csv(path))
+    if not tables:
+        raise FileNotFoundError("No baseline comparison table is available to aggregate.")
+    combined = pd.concat(tables, ignore_index=True).sort_values(
+        ["dataset_split", "training_strategy", "auc", "model_name"],
+        ascending=[True, True, False, True],
+    )
+    target = report_root / "baseline_model_performance_comparison.csv"
+    combined.to_csv(target, index=False)
+    return target
+
+
+def _train_one_strategy(
     dataset_paths: Mapping[str, str | Path],
     feature_list_path: str | Path,
     models_directory: str | Path,
@@ -200,7 +224,7 @@ def train_baseline_models(
     names = tuple(model_names)
     if not names or len(names) != len(set(names)) or set(names) - set(MODEL_NAMES):
         raise ValueError(f"model_names must be a unique non-empty subset of {MODEL_NAMES}.")
-    if training_strategy not in {"baseline", "class_weight", "smote", "undersampled"}:
+    if training_strategy not in TRAINING_STRATEGIES:
         raise ValueError("training_strategy must be baseline, class_weight, smote, or undersampled.")
     if training_strategy == "class_weight" and class_weight_path is None:
         raise ValueError("class_weight_path is required for the class_weight strategy.")
@@ -208,12 +232,13 @@ def train_baseline_models(
     paths = {name: Path(value).expanduser().resolve() for name, value in dataset_paths.items()}
     features = _load_features(Path(feature_list_path).expanduser().resolve())
     class_weights = _class_weights(Path(class_weight_path).expanduser().resolve()) if class_weight_path else None
-    model_root = Path(models_directory).expanduser().resolve()
+    model_root = Path(models_directory).expanduser().resolve() / training_strategy
     report_root = Path(reports_directory).expanduser().resolve()
-    artifact_dir = model_root / "artifacts"
-    prediction_dir = model_root / "predictions"
-    log_dir = model_root / "logs"
-    for directory in (artifact_dir, prediction_dir, log_dir, report_root):
+    artifact_dir = model_root / "models"
+    validation_prediction_dir = model_root / "validation_predictions"
+    test_prediction_dir = model_root / "test_predictions"
+    log_dir = model_root / "run_logs"
+    for directory in (artifact_dir, validation_prediction_dir, test_prediction_dir, log_dir, report_root):
         directory.mkdir(parents=True, exist_ok=True)
 
     train_x, train_y, _ = _load_split(paths["train"], features)
@@ -234,8 +259,8 @@ def train_baseline_models(
         fit_seconds = time.perf_counter() - model_started
         validation_scores = estimator.predict_proba(validation_x)[:, 1]
         test_scores = estimator.predict_proba(test_x)[:, 1]
-        validation_path = prediction_dir / f"{name}_validation_predictions.parquet"
-        test_path = prediction_dir / f"{name}_test_predictions.parquet"
+        validation_path = validation_prediction_dir / f"{name}.parquet"
+        test_path = test_prediction_dir / f"{name}.parquet"
         _write_predictions(validation_tracking, validation_y, validation_scores, name, "validation", validation_path)
         _write_predictions(test_tracking, test_y, test_scores, name, "test", test_path)
         artifact_path = artifact_dir / f"{name}.joblib"
@@ -270,8 +295,9 @@ def train_baseline_models(
         runs[name] = run
 
     comparison = pd.DataFrame(rows).sort_values(["dataset_split", "auc", "model_name"], ascending=[True, False, True])
-    comparison_path = report_root / "baseline_model_comparison.csv"
+    comparison_path = report_root / f"baseline_model_comparison_{training_strategy}.csv"
     comparison.to_csv(comparison_path, index=False)
+    aggregate_comparison_path = _write_aggregate_comparison(report_root)
     summary = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "status": "passed",
@@ -286,7 +312,52 @@ def train_baseline_models(
         "runtime_seconds": round(time.perf_counter() - started, 6),
         "models": runs,
         "comparison_path": str(comparison_path),
+        "aggregate_comparison_path": str(aggregate_comparison_path),
     }
-    summary_path = report_root / "baseline_training_summary.json"
+    summary_path = report_root / f"baseline_training_summary_{training_strategy}.json"
     summary_path.write_text(json.dumps(_json_safe(summary), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return {"comparison_path": comparison_path, "summary_path": summary_path, "comparison": comparison, "summary": summary}
+    return {"comparison_path": comparison_path, "aggregate_comparison_path": aggregate_comparison_path, "summary_path": summary_path, "comparison": comparison, "summary": summary}
+
+
+def train_model_matrix(
+    dataset_paths_by_strategy: Mapping[str, Mapping[str, str | Path]],
+    feature_list_path: str | Path,
+    models_directory: str | Path,
+    reports_directory: str | Path,
+    class_weight_path: str | Path,
+    strategies: Iterable[str] = TRAINING_STRATEGIES,
+    model_names: Iterable[str] = MODEL_NAMES,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Train the requested sampling-strategy × model matrix with one entry point.
+
+    The default matrix contains four training strategies and four fixed traditional
+    models, producing sixteen fitted models. Every strategy is evaluated against
+    the same untouched validation and test datasets; no result selects a winner.
+    """
+
+    chosen = tuple(strategies)
+    chosen_models = tuple(model_names)
+    if not chosen or len(chosen) != len(set(chosen)) or set(chosen) - set(TRAINING_STRATEGIES):
+        raise ValueError(f"strategies must be a unique non-empty subset of {TRAINING_STRATEGIES}.")
+    missing = sorted(set(chosen) - set(dataset_paths_by_strategy))
+    if missing:
+        raise ValueError(f"dataset_paths_by_strategy is missing strategies: {missing}")
+    results = {}
+    for strategy in chosen:
+        results[strategy] = _train_one_strategy(
+            dataset_paths_by_strategy[strategy],
+            feature_list_path,
+            models_directory,
+            reports_directory,
+            class_weight_path=class_weight_path if strategy == "class_weight" else None,
+            model_names=chosen_models,
+            training_strategy=strategy,
+            random_state=random_state,
+        )
+    report_root = Path(reports_directory).expanduser().resolve()
+    return {
+        "strategy_results": results,
+        "aggregate_comparison_path": _write_aggregate_comparison(report_root),
+        "model_count": len(chosen) * len(chosen_models),
+    }

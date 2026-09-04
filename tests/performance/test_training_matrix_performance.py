@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.models.baseline_training import train_baseline_models
+from src.models.training_matrix import train_model_matrix
 
 
 def _frame(rows: int, offset: int) -> pd.DataFrame:
@@ -25,7 +25,7 @@ def _frame(rows: int, offset: int) -> pd.DataFrame:
     )
 
 
-def test_baseline_training_performance(tmp_path: Path) -> None:
+def test_training_matrix_performance(tmp_path: Path) -> None:
     """Record Logistic Regression runtime for 20,000 train and 8,000 evaluation rows."""
 
     paths = {}
@@ -36,9 +36,9 @@ def test_baseline_training_performance(tmp_path: Path) -> None:
     features = tmp_path / "features.json"
     features.write_text(json.dumps({"selected_model_features": ["feature_a", "feature_b", "feature_c"]}), encoding="utf-8")
     started = time.perf_counter()
-    result = train_baseline_models(paths, features, tmp_path / "models", tmp_path / "reports", model_names=("logistic_regression",), training_strategy="baseline")
+    result = train_model_matrix({"baseline": paths}, features, tmp_path / "models", tmp_path / "reports", tmp_path / "unused_weights.json", strategies=("baseline",), model_names=("logistic_regression",))
     runtime = time.perf_counter() - started
-    payload = json.loads(result["summary_path"].read_text(encoding="utf-8"))
+    payload = json.loads(result["strategy_results"]["baseline"]["summary_path"].read_text(encoding="utf-8"))
     payload["test_wall_runtime_seconds"] = round(runtime, 6)
     (tmp_path / "baseline_training_performance.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"runtime_seconds": payload["runtime_seconds"], "test_wall_runtime_seconds": payload["test_wall_runtime_seconds"]}))

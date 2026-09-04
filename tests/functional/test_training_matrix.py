@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.models.baseline_training import MODEL_NAMES, train_baseline_models
+from src.models.training_matrix import MODEL_NAMES, train_model_matrix
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -50,41 +50,42 @@ def _inputs(tmp_path: Path) -> tuple[dict[str, Path], Path, Path]:
     return paths, features, weights
 
 
-def test_train_all_baseline_models_writes_required_artifacts(tmp_path) -> None:
-    """Train all four baselines and preserve validation/test prediction traceability."""
+def test_training_matrix_writes_required_artifacts(tmp_path) -> None:
+    """Train one requested matrix strategy and preserve prediction traceability."""
 
     paths, features, weights = _inputs(tmp_path)
-    result = train_baseline_models(
-        paths, features, tmp_path / "models" / "baselines", tmp_path / "reports",
-        class_weight_path=weights, training_strategy="class_weight", random_state=7,
+    result = train_model_matrix(
+        {"class_weight": paths}, features, tmp_path / "models" / "traditional_ml", tmp_path / "reports",
+        weights, strategies=("class_weight",), random_state=7,
     )
-    comparison = pd.read_csv(result["comparison_path"])
-    summary = json.loads(result["summary_path"].read_text(encoding="utf-8"))
+    strategy_result = result["strategy_results"]["class_weight"]
+    comparison = pd.read_csv(strategy_result["comparison_path"])
+    summary = json.loads(strategy_result["summary_path"].read_text(encoding="utf-8"))
     assert set(comparison["model_name"]) == set(MODEL_NAMES)
     assert comparison.shape[0] == 8
     assert set(comparison["dataset_split"]) == {"validation", "test"}
     assert summary["test_used_for_tuning_or_selection"] is False
     assert summary["model_selection_decision"] is None
     for name in MODEL_NAMES:
-        assert (tmp_path / "models" / "baselines" / "artifacts" / f"{name}.joblib").is_file()
-        assert (tmp_path / "models" / "baselines" / "logs" / f"{name}_run.json").is_file()
+        assert (tmp_path / "models" / "traditional_ml" / "class_weight" / "models" / f"{name}.joblib").is_file()
+        assert (tmp_path / "models" / "traditional_ml" / "class_weight" / "run_logs" / f"{name}_run.json").is_file()
         for split, expected_rows in (("validation", 80), ("test", 70)):
-            prediction = pd.read_parquet(tmp_path / "models" / "baselines" / "predictions" / f"{name}_{split}_predictions.parquet")
+            prediction = pd.read_parquet(tmp_path / "models" / "traditional_ml" / "class_weight" / f"{split}_predictions" / f"{name}.parquet")
             assert prediction.shape[0] == expected_rows
             assert list(prediction.columns) == ["user_id", "item_id", "category_id", "label", "prediction_score", "prediction_label", "model_name", "dataset_split"]
 
 
-def test_baseline_training_cli_supports_one_requested_model(tmp_path) -> None:
-    """Run the command-line interface without requiring a test-data selection step."""
+def test_training_matrix_cli_supports_a_requested_subset(tmp_path) -> None:
+    """Run the single matrix CLI for one compact strategy/model subset."""
 
     paths, features, _ = _inputs(tmp_path)
     run = subprocess.run(
         [
-            sys.executable, str(PROJECT_ROOT / "scripts" / "train_baseline_models.py"),
-            "--train-input", str(paths["train"]), "--validation-input", str(paths["validation"]),
+            sys.executable, str(PROJECT_ROOT / "scripts" / "train_model_matrix.py"),
+            "--baseline-train-input", str(paths["train"]), "--validation-input", str(paths["validation"]),
             "--test-input", str(paths["test"]), "--feature-list", str(features),
             "--models-dir", str(tmp_path / "models"), "--reports-dir", str(tmp_path / "reports"),
-            "--training-strategy", "baseline", "--models", "logistic_regression",
+            "--strategies", "baseline", "--models", "logistic_regression",
         ],
         cwd=PROJECT_ROOT, capture_output=True, text=True, check=False,
     )

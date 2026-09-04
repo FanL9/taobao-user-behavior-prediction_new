@@ -43,9 +43,12 @@ experiments/tracking/**
 models/**
 !models/**/
 !models/**/.gitkeep
+!models/traditional_ml/README.md
 
 # Small tracked baseline-training summary; model binaries and predictions remain local.
 !reports/stage4/baseline_model_comparison.csv
+!reports/stage4/baseline_model_comparison_*.csv
+!reports/stage4/baseline_model_performance_comparison.csv
 
 # Keep the repository directory skeleton
 !.gitkeep

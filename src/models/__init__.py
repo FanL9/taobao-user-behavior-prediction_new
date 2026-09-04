@@ -1,5 +1,5 @@
 """Traditional machine-learning model training interfaces."""
 
-from .baseline_training import train_baseline_models
+from .training_matrix import train_model_matrix
 
-__all__ = ["train_baseline_models"]
+__all__ = ["train_model_matrix"]

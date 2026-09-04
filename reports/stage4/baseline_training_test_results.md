@@ -5,7 +5,7 @@
 执行命令：
 
 ```powershell
-python scripts/train_baseline_models.py
+python scripts/train_model_matrix.py
 ```
 
 训练策略为 `class_weight`：训练数据使用原始未采样的筛选后训练集，并使用仅由训练集生成的类别权重；验证集和测试集均保持原始分布。模型输入为 Issue4 确定的 37 个特征，追踪字段、标签和 `is_synthetic` 均已排除。测试集仅在模型拟合完成后记录预测和指标，没有参与调参或模型选择。
@@ -17,14 +17,25 @@ python scripts/train_baseline_models.py
 | XGBoost | 18.815613 | 0.849602 | 0.009297 | 0.428894 | 0.018199 | 0.130125 | 0.750830 | 0.011074 | 0.139610 | 0.020520 | 0.130630 |
 | LightGBM | 12.541014 | 0.714533 | 0.001804 | 0.772009 | 0.003599 | 11.783813 | 0.556911 | 0.002133 | 0.910714 | 0.004256 | 27.478674 |
 
-四个模型的验证集与测试集预测文件均已生成，分别包含 1,110,131 行和 329,938 行。完整指标见 `baseline_model_comparison.csv`，各模型的固定参数、输出路径、运行时间及进程 RSS 增量见 `models/baselines/logs/*_run.json` 和 `baseline_training_summary.json`。
+每个方案的四个模型均生成验证集与测试集预测，分别包含 1,110,131 行和 329,938 行。完整指标见 `baseline_model_performance_comparison.csv`；各模型的固定参数、输出路径、运行时间及进程 RSS 增量见 `models/traditional_ml/<方案>/run_logs/*_run.json` 和对应的训练汇总 JSON。
 
-Logistic Regression 在固定的 `max_iter=200` 上达到迭代上限，收敛警告已保留在 `models/baselines/logs/training_stderr.log`。本步骤不改变参数进行深度调优。
+Logistic Regression 在固定的 `max_iter=200` 上达到迭代上限，收敛警告已保留在各方案的 `models/traditional_ml/<方案>/run_logs/training_stderr.log`。本步骤不改变参数进行深度调优。
+
+## 四种类别不平衡方案补充运行
+
+在既有 `class_weight` 结果基础上，已补跑 `baseline`（原始未采样）、`smote` 和 `undersampled`。四种方案均训练 Logistic Regression、Random Forest、XGBoost 和 LightGBM，使用相同的最终特征、固定参数、原始验证集和原始测试集。
+
+- 汇总表：`reports/stage4/baseline_model_performance_comparison.csv`
+- 单方案表：`baseline_model_comparison_baseline.csv`、`baseline_model_comparison_smote.csv`、`baseline_model_comparison_undersampled.csv`，以及已有的 `baseline_model_comparison.csv`（类别权重）。
+- 汇总表包含 32 行：4 个方案 × 4 个模型 × 验证/测试 2 个数据集。
+- 四种方案的模型、预测和日志均位于 `models/traditional_ml/<方案>/`；每种方案包含 4 个模型、4 个验证预测、4 个测试预测和 4 份模型日志。
+
+该汇总仅记录可比较的基线结果，不据此作最终模型或最终采样方案选择。
 
 ## 功能测试记录
 
 ```powershell
-python -m pytest tests/functional/test_baseline_training.py -q
+python -m pytest tests/functional/test_training_matrix.py -q
 # 2 passed
 ```
 
@@ -33,7 +44,7 @@ python -m pytest tests/functional/test_baseline_training.py -q
 ## 性能测试记录
 
 ```powershell
-python -m pytest tests/performance/test_baseline_training_performance.py -q -s
+python -m pytest tests/performance/test_training_matrix_performance.py -q -s
 # 1 passed
 ```
 

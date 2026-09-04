@@ -73,6 +73,18 @@ python scripts/clean_user_behavior.py
 
 正式清洗数据需同步至团队 Google Drive 的 `taobao/data/processed/`，GitHub 不保存数据文件本体。
 
+## 当前：基线模型训练
+
+阶段三的数据处理完成后，可直接运行传统机器学习基线训练：
+
+```bash
+python scripts/train_model_matrix.py
+```
+
+该命令统一运行 4 个训练方案（原始、SMOTE、欠采样、类别权重）和 4 个模型，共 16 个训练结果。模型、预测和日志按方案保存在本地 `models/traditional_ml/<方案>/`；性能对比表保存在 `reports/stage4/baseline_model_performance_comparison.csv`。测试集只用于最终记录，不参与调参或模型选择。
+
+详细说明见 [基线模型训练文档](docs/stage4/baseline_model_training.md)。
+
 ## 验证
 
 ```bash
