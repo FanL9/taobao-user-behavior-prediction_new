@@ -1,0 +1,11 @@
+feature,model_importance
+item_cart_count,0.19929997622966766
+last_behavior_days_ago,0.1563163697719574
+last_10_behavior_sequence_code,0.06489259004592896
+item_active_day_count,0.05482371896505356
+buy_per_pv,0.04370260611176491
+item_unique_user_count,0.03677118569612503
+item_total_count,0.03540119156241417
+last_behavior_type_code,0.030978281050920486
+buy_per_cart,0.02613268792629242
+item_buy_count,0.024791382253170013

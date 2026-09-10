@@ -85,6 +85,30 @@ python scripts/train_model_matrix.py
 
 详细说明见 [基线模型训练文档](docs/stage4/baseline_model_training.md)。
 
+基线训练后，可对四种训练方案下的四个传统模型进行仅基于训练集和验证集的 Optuna 调优：
+
+```bash
+python scripts/tune_primary_models.py --n-trials 5 --device gpu
+```
+
+该命令对 16 个“训练方案 × 模型”组合使用相同试验次数预算，不读取测试集，也不执行模型融合。调优前后结果见 `reports/stage4/model_tuning/`；测试集留给后续综合评估。详细说明见 [模型调优文档](docs/stage4/model_tuning.md)。
+
+完成调优后，可基于训练集 OOF 预测执行 Stacking 融合，并仅在验证集上与单模型比较：
+
+```bash
+python scripts/run_stacking_fusion.py --folds 5 --base-model-count 3
+```
+
+融合不会读取测试集。详细说明见 [模型融合文档](docs/stage4/model_stacking.md)。
+
+Issue2.5 确定候选方案后，可在测试集上进行一次最终综合评估：
+
+```bash
+python scripts/evaluate_final_models.py
+```
+
+评估输出测试集指标、ROC/PR 曲线、混淆矩阵和阈值敏感性分析，不重新训练或调参。详细说明见 [模型综合评估文档](docs/stage4/model_evaluation.md)。
+
 ## 验证
 
 ```bash

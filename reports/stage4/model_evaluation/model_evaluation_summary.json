@@ -1,0 +1,23 @@
+{
+  "status": "passed",
+  "generated_at_utc": "2026-09-09T07:12:19.461001+00:00",
+  "candidates": [
+    "baseline__xgboost",
+    "undersampled__lightgbm",
+    "undersampled__random_forest",
+    "stacking_logistic_regression"
+  ],
+  "selection_split": "validation",
+  "test_evaluation_count": 1,
+  "test_used_for_tuning_or_selection": false,
+  "prediction_threshold": 0.5,
+  "test_prediction_path": "D:\\taobao-user-behavior-prediction_new\\models\\traditional_ml\\stacking\\test_predictions\\issue3_final_candidate_predictions.parquet",
+  "metrics_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_evaluation\\final_model_performance_comparison.csv",
+  "roc_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_evaluation\\test_roc_curves.png",
+  "pr_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_evaluation\\test_pr_curves.png",
+  "confusion_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_evaluation\\test_confusion_matrices.csv",
+  "threshold_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_evaluation\\test_threshold_sensitivity.csv",
+  "report_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_evaluation\\model_evaluation_report.md",
+  "runtime_seconds": 38.198091,
+  "peak_process_rss_bytes": 872636416
+}

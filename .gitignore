@@ -49,6 +49,16 @@ models/**
 !reports/stage4/baseline_model_comparison.csv
 !reports/stage4/baseline_model_comparison_*.csv
 !reports/stage4/baseline_model_performance_comparison.csv
+!reports/stage4/model_tuning/*.csv
+!reports/stage4/stacking_fusion/*.csv
+!reports/stage4/model_evaluation/*.csv
+!reports/stage4/model_interpretability/*.csv
+
+# Local execution logs and tool-specific temporary files
+reports/stage4/**/issue*_stdout.log
+reports/stage4/**/issue*_stderr.log
+reports/stage4/model_dashboard/
+.tmp-miktex-config/
 
 # Keep the repository directory skeleton
 !.gitkeep

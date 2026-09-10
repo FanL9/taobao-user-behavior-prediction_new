@@ -1,0 +1,16 @@
+candidate,fold,training_strategy,model_name,fit_sample_count,holdout_sample_count,fit_seconds,rss_delta_bytes
+baseline__xgboost,1,baseline,xgboost,2355660,588916,5.935843,245288960
+baseline__xgboost,2,baseline,xgboost,2355661,588915,4.866869,3026944
+baseline__xgboost,3,baseline,xgboost,2355661,588915,5.145543,4239360
+baseline__xgboost,4,baseline,xgboost,2355661,588915,5.349526,3182592
+baseline__xgboost,5,baseline,xgboost,2355661,588915,4.80239,2445312
+undersampled__lightgbm,1,undersampled,lightgbm,1432,588916,1.352079,2256896
+undersampled__lightgbm,2,undersampled,lightgbm,1432,588915,1.263908,524288
+undersampled__lightgbm,3,undersampled,lightgbm,1432,588915,1.247108,1024000
+undersampled__lightgbm,4,undersampled,lightgbm,1432,588915,1.286424,434176
+undersampled__lightgbm,5,undersampled,lightgbm,1432,588915,1.249868,122880
+undersampled__random_forest,1,undersampled,random_forest,1432,588916,1.522882,58396672
+undersampled__random_forest,2,undersampled,random_forest,1432,588915,1.473734,184320
+undersampled__random_forest,3,undersampled,random_forest,1432,588915,1.452222,20480
+undersampled__random_forest,4,undersampled,random_forest,1432,588915,1.528773,24576
+undersampled__random_forest,5,undersampled,random_forest,1432,588915,1.453668,24576

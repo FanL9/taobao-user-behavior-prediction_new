@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "model_candidate": "baseline__xgboost",
+  "model_training_or_tuning_performed": false,
+  "error_analysis_threshold": 0.05,
+  "shap_sample_size": 10000,
+  "shap_positive_rows": 616,
+  "cold_start_definition": "raw user_event_count <= 1",
+  "long_tail_definition": "raw item_total_count <= 1",
+  "preprocessing_rules_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage3\\preprocessing_rules.json",
+  "generated_at_utc": "2026-09-09T08:51:00.809727+00:00",
+  "runtime_seconds": 1.249191,
+  "peak_process_rss_bytes": 698142720
+}

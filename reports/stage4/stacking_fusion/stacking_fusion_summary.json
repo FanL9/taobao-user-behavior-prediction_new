@@ -1,0 +1,104 @@
+{
+  "selection_split": "validation",
+  "selection_metric": "auc",
+  "base_candidates": [
+    "baseline__xgboost",
+    "undersampled__lightgbm",
+    "undersampled__random_forest"
+  ],
+  "base_model_parameters": {
+    "baseline__xgboost": {
+      "n_estimators": 50,
+      "max_depth": 5,
+      "learning_rate": 0.10808509281104674,
+      "min_child_weight": 19.457633925110503,
+      "subsample": 0.9220068802321809,
+      "colsample_bytree": 0.750966162286569,
+      "reg_alpha": 0.00043816413921199957,
+      "reg_lambda": 0.0017919505775248114
+    },
+    "undersampled__lightgbm": {
+      "n_estimators": 100,
+      "num_leaves": 44,
+      "max_depth": 4,
+      "learning_rate": 0.054583078303562155,
+      "min_child_samples": 55,
+      "subsample": 0.8430320097124572,
+      "colsample_bytree": 0.6512911496092856,
+      "reg_alpha": 5.057439052928447e-07,
+      "reg_lambda": 0.07898801235399926
+    },
+    "undersampled__random_forest": {
+      "n_estimators": 100,
+      "max_depth": 9,
+      "min_samples_split": 16,
+      "min_samples_leaf": 4,
+      "max_features": "log2"
+    }
+  },
+  "meta_model": {
+    "model_name": "logistic_regression",
+    "parameters": {
+      "C": 1.0,
+      "class_weight": null,
+      "dual": false,
+      "fit_intercept": true,
+      "intercept_scaling": 1,
+      "l1_ratio": 0.0,
+      "max_iter": 1000,
+      "n_jobs": null,
+      "penalty": "deprecated",
+      "random_state": 42,
+      "solver": "lbfgs",
+      "tol": 0.0001,
+      "verbose": 0,
+      "warm_start": false
+    }
+  },
+  "issue3_candidates": [
+    {
+      "candidate": "baseline__xgboost",
+      "variant": "single_model",
+      "auc": 0.8991301711766673,
+      "average_precision": 0.024073064023300533,
+      "logloss": 0.0051943368702737115
+    },
+    {
+      "candidate": "undersampled__lightgbm",
+      "variant": "single_model",
+      "auc": 0.896692960386789,
+      "average_precision": 0.01436500540358914,
+      "logloss": 0.7074538656082253
+    },
+    {
+      "candidate": "stacking_logistic_regression",
+      "variant": "stacking",
+      "auc": 0.8964496955594031,
+      "average_precision": 0.012428588682911726,
+      "logloss": 0.005465847277161813
+    },
+    {
+      "candidate": "undersampled__random_forest",
+      "variant": "single_model",
+      "auc": 0.8858497528879663,
+      "average_precision": 0.009929005198069205,
+      "logloss": 0.6518482562933402
+    }
+  ],
+  "validation_leader": "baseline__xgboost",
+  "test_data_read": false,
+  "test_used_for_training_or_selection": false,
+  "folds": 5,
+  "base_model_count": 3,
+  "device": "gpu",
+  "oof_prediction_path": "D:\\taobao-user-behavior-prediction_new\\models\\traditional_ml\\stacking\\oof_predictions\\training_oof_predictions.parquet",
+  "validation_prediction_path": "D:\\taobao-user-behavior-prediction_new\\models\\traditional_ml\\stacking\\validation_predictions\\stacking_validation_predictions.parquet",
+  "meta_model_path": "D:\\taobao-user-behavior-prediction_new\\models\\traditional_ml\\stacking\\models\\stacking_meta_model.joblib",
+  "base_models_path": "D:\\taobao-user-behavior-prediction_new\\models\\traditional_ml\\stacking\\models\\base_models.joblib",
+  "comparison_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\stacking_fusion\\stacking_validation_performance_comparison.csv",
+  "fold_records_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\stacking_fusion\\stacking_oof_fold_records.csv",
+  "meta_fit_seconds": 29.576929,
+  "runtime_seconds": 77.497863,
+  "peak_process_rss_bytes": 2423934976,
+  "completed_at_utc": "2026-09-09T07:11:35.309721+00:00"
+}

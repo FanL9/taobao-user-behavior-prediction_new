@@ -13,6 +13,7 @@ from data_loader import (
     load_stage2_dashboard_outputs,
     load_stage2_feature_inventory,
 )
+from model_dashboard import render_model_dashboard
 
 
 st.set_page_config(
@@ -506,6 +507,7 @@ NAV_ITEMS = [
     ("activity", "11", "Activity & Conversion", "activity-conversion"),
     ("popularity", "12", "Popularity & Conversion", "popularity-conversion"),
     ("category-traffic", "13", "Category & Conversion", "category-traffic-conversion"),
+    ("model-evaluation", "14", "Model Evaluation", "model-evaluation"),
 ]
 
 
@@ -1996,3 +1998,5 @@ st.html(
 </style>
     """
 )
+
+render_model_dashboard()

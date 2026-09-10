@@ -1,0 +1,5 @@
+candidate,tn,fp,fn,tp
+baseline__xgboost,329322,0,616,0
+undersampled__lightgbm,147058,182264,38,578
+undersampled__random_forest,168380,160942,55,561
+stacking_logistic_regression,329322,0,616,0

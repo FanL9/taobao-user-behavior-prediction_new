@@ -1,0 +1,18 @@
+{
+  "generated_at_utc": "2026-09-08T16:31:05.420086+00:00",
+  "status": "passed",
+  "candidate_count": 16,
+  "trial_budget_per_candidate": 5,
+  "device": "gpu",
+  "trial_count": 80,
+  "selection_metric": "auc",
+  "selection_split": "validation",
+  "test_data_read": false,
+  "test_used_for_tuning_or_selection": false,
+  "runtime_seconds": 13821.178418,
+  "peak_process_rss_bytes": 1189433344,
+  "search_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_tuning\\optuna_search_results.csv",
+  "parameters_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_tuning\\best_tuned_model_parameters.json",
+  "comparison_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_tuning\\tuned_validation_performance_comparison.csv",
+  "candidate_pool_path": "D:\\taobao-user-behavior-prediction_new\\reports\\stage4\\model_tuning\\model_fusion_candidate_pool.csv"
+}
