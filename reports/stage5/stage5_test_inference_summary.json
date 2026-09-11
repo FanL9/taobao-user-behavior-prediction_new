@@ -1,0 +1,32 @@
+{
+  "status": "passed",
+  "generated_at_utc": "2026-09-11T13:04:12.554216+00:00",
+  "final_candidate": "baseline__xgboost",
+  "model_artifact": "D:\\阿里巴巴实习2\\taobao-user-behavior-prediction_new\\models\\traditional_ml\\stacking\\models\\base_models.joblib",
+  "model_bundle_key": "baseline__xgboost",
+  "preprocessing_rules": "D:\\阿里巴巴实习2\\taobao-user-behavior-prediction_new\\reports\\stage3\\preprocessing_rules.json",
+  "feature_list": "D:\\阿里巴巴实习2\\taobao-user-behavior-prediction_new\\reports\\stage3\\final_model_features.json",
+  "model_feature_count": 37,
+  "prediction_threshold": 0.5,
+  "input_path": "D:\\阿里巴巴实习2\\taobao-user-behavior-prediction_new\\data\\interim\\stage5_inference_test.parquet",
+  "output_path": "D:\\阿里巴巴实习2\\taobao-user-behavior-prediction_new\\outputs\\predictions\\stage5_test_predictions.parquet",
+  "output_columns": [
+    "user_id",
+    "item_id",
+    "category_id",
+    "purchase_probability",
+    "predicted_purchase"
+  ],
+  "row_count": 329938,
+  "batch_size": 50000,
+  "runtime_seconds": 0.609862,
+  "process_cpu_seconds": 15.125,
+  "throughput_rows_per_second": 541004.54,
+  "rss_start_bytes": 298053632,
+  "rss_end_bytes": 533438464,
+  "peak_process_rss_bytes": 537501696,
+  "gpu_used_by_inference_wrapper": false,
+  "preprocessing_refit_performed": false,
+  "feature_selection_performed": false,
+  "model_training_performed": false
+}

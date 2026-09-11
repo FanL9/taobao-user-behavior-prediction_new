@@ -1,0 +1,12 @@
+{
+  "final_candidate": "baseline__xgboost",
+  "model_artifact": "models/traditional_ml/stacking/models/base_models.joblib",
+  "model_bundle_key": "baseline__xgboost",
+  "preprocessing_rules": "reports/stage3/preprocessing_rules.json",
+  "feature_list": "reports/stage3/final_model_features.json",
+  "selection_manifest": "reports/stage4/stacking_fusion/issue3_candidate_manifest.json",
+  "evaluation_summary": "reports/stage4/model_evaluation/model_evaluation_summary.json",
+  "prediction_threshold": 0.5,
+  "input_contract": "raw_stage2_user_item_features",
+  "output_probability_column": "purchase_probability"
+}
