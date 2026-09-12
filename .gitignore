@@ -35,6 +35,13 @@ data/**
 *.sqlite
 *.sqlite3
 
+# Serialized model binaries: never commit, even if accidentally placed
+# outside the canonical models/ directory.
+*.joblib
+*.pkl
+*.pickle
+*.onnx
+
 # Generated runtime artifacts
 outputs/**
 artifacts/**
@@ -59,6 +66,11 @@ reports/stage4/**/issue*_stdout.log
 reports/stage4/**/issue*_stderr.log
 reports/stage4/model_dashboard/
 .tmp-miktex-config/
+
+# Local packaging / handoff files
+project_*.zip
+*_artifact_manifest.txt
+local_backup/
 
 # Keep the repository directory skeleton
 !.gitkeep

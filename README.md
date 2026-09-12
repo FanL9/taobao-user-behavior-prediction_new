@@ -1,130 +1,262 @@
-# 淘宝用户行为预测
+# 淘宝用户行为分析与购买概率预测
 
-本项目基于淘宝用户行为记录，逐阶段完成数据检查、特征工程和购买预测。当前仓库包含阶段一的数据接入、只读质量检查和标准数据清洗实现。
+本项目基于淘宝用户行为记录，完成从数据质量检查、清洗、EDA、特征工程、标签与数据集构建、传统机器学习建模与调优、模型解释，到本地批量购买概率推理的完整链路。
 
-## 数据口径
+项目当前已完成 **Stage 1–5**，最终模型为 `baseline__xgboost`。GitHub 仅保存代码、配置、文档和轻量结果；大数据、模型二进制和预测文件均保留在本地/团队共享存储中。
 
-阶段一输入文件固定为 `data/raw/user_behavior_processed.csv`，包含且仅包含以下列（顺序固定）：
+## 核心结果
 
-| 字段 | 类型 | 含义 |
-| --- | --- | --- |
-| `time` | 字符串 | 行为发生时间，格式 `YYYY-MM-DD HH` |
-| `user_id` | 整数 | 用户标识 |
-| `item_id` | 整数 | 商品标识 |
-| `item_category` | 整数 | 商品类目标识 |
-| `behavior_type` | 整数 | 行为类型编码，允许值为 `1`、`2`、`3`、`4` |
+| 指标 | 结果 |
+| --- | ---: |
+| 原始行为记录 | 12,256,906 |
+| 用户数 | 10,000 |
+| 商品数 | 2,876,947 |
+| 用户—商品特征宽表 | 4,384,645 行 × 64 列 |
+| 总正样本 | 2,397 |
+| 总正样本率 | 0.054668% |
+| 最终入模特征 | 37 |
+| 最终模型 | `baseline__xgboost` |
+| 验证集 AUC | 0.899130 |
+| 测试集 AUC | 0.874953 |
+| 测试集 Average Precision | 0.029451 |
+| 全量 test 批量推理 | 329,938 行 |
+| 推理吞吐 | 541,004.54 rows/s |
 
-完整约定见 [统一口径文档](docs/project_definition.md)。CSV 转 Parquet 只做格式转换和类型校验，不清洗、不去重、不修改业务值。
+> 数据高度类别不平衡，因此 AUC、Average Precision、概率排序和业务阈值比默认 0.5 分类准确率更有解释价值。最终推理的核心输出是 `purchase_probability`。
 
-## 快速开始
+## 项目流程
 
-要求 Python 3.10 或更高版本。
+```text
+Stage 1
+原始行为数据
+  → 数据质量检查
+  → 标准清洗
+  → EDA / 看板
+
+Stage 2
+清洗数据
+  → 四张中间表
+  → 八张特征表
+  → 用户-商品 64 列初版特征宽表
+  → 特征工程关系看板
+
+Stage 3
+特征宽表
+  → 未来 1 天购买标签
+  → 时间顺序 train / validation / test
+  → 训练集拟合预处理
+  → 54 → 37 特征筛选
+  → 类别不平衡数据版本
+
+Stage 4
+37 个最终特征
+  → 4 种不平衡策略 × 4 类模型
+  → Optuna 调参
+  → Stacking 候选比较
+  → 测试集最终评估
+  → SHAP / 错误样本 / 冷启动与长尾分析
+  → 模型评估看板
+
+Stage 5
+既定模型 + Stage 3 规则
+  → 本地批量推理
+  → 用户-商品购买概率
+```
+
+完整运行顺序见 [`docs/project_workflow.md`](docs/project_workflow.md)。
+
+## 环境
+
+建议使用 Python 3.10+。
 
 ```bash
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+
+# macOS/Linux
+source .venv/bin/activate
+
 python -m pip install -r requirements.txt
 ```
 
-1. 从团队 Google Drive 下载 `user_behavior_processed.csv`，放入 `data/raw/`。
-2. 初始化仅含空表结构的本地数据库：
+`scikit-learn` 在 `requirements.txt` 中固定为与当前序列化模型一致的 `1.8.0`，避免跨版本反序列化警告。
+
+## 数据与模型文件
+
+### 数据
+
+原始和派生数据均位于 `data/`，通过团队共享存储传递，不提交 GitHub。
+
+阶段一原始输入：
+
+```text
+data/raw/user_behavior_processed.csv
+```
+
+Stage 5 默认推理输入：
+
+```text
+data/features/user_item_feature_wide.parquet
+```
+
+### 模型
+
+最终推理使用：
+
+```text
+models/traditional_ml/stacking/models/base_models.joblib
+```
+
+模型 bundle key：
+
+```text
+baseline__xgboost
+```
+
+模型二进制受 `.gitignore` 保护，不提交 GitHub。进行 Stage 5 推理前，需要从团队模型产物或完成 Stage 4 的本地环境取得该文件。
+
+## 快速运行
+
+### Stage 1：数据接入、检查与清洗
 
 ```bash
 python scripts/setup_local_database.py
-```
-
-3. 分块转换 CSV，避免一次将全量数据载入内存：
-
-```bash
 python scripts/convert_csv_to_parquet.py
-```
-
-默认输出为 `data/raw/user_behavior_processed.parquet`。已有输出不会被覆盖；确认需要重建时添加 `--overwrite`。查看所有参数可运行 `python scripts/convert_csv_to_parquet.py --help`。
-
-4. 对原始 CSV 做只读质量检查：
-
-```bash
 python scripts/check_data_quality.py
-```
-
-默认输出 `reports/stage1/data_quality_report.json`，不会修改原始 CSV，也不会生成清洗数据。
-
-
-### 阶段一标准数据清洗
-
-运行：
-
-```bash
 python scripts/clean_user_behavior.py
 ```
 
-默认输入：
+### Stage 2：中间表、特征表与宽表
 
-`data/raw/user_behavior_processed.csv`
+```bash
+python scripts/build_stage2_intermediate_tables.py
+python scripts/build_stage2_feature_tables.py
+python scripts/build_user_item_feature_wide.py
+python scripts/build_stage2_dashboard_stats.py
+```
 
-默认输出：
+EDA/特征看板：
 
-- `data/processed/user_behavior_clean.csv`
-- `data/processed/user_behavior_clean.parquet`
-- `reports/stage1/cleaning_report.json`
+```bash
+streamlit run dashboards/eda/app.py
+```
 
-清洗流程采用分块读取与 Hash 分区完成跨 Chunk 全局精确去重，不修改原始数据。
+### Stage 3：标签、划分、预处理与特征筛选
 
-正式清洗数据需同步至团队 Google Drive 的 `taobao/data/processed/`，GitHub 不保存数据文件本体。
+```bash
+python scripts/generate_purchase_labels.py
+python scripts/split_labeled_datasets.py
+python scripts/preprocess_features.py
+python scripts/select_features.py
+python scripts/prepare_class_imbalance.py
+```
 
-## 当前：基线模型训练
-
-阶段三的数据处理完成后，可直接运行传统机器学习基线训练：
+### Stage 4：模型训练、调参、融合与评估
 
 ```bash
 python scripts/train_model_matrix.py
-```
-
-该命令统一运行 4 个训练方案（原始、SMOTE、欠采样、类别权重）和 4 个模型，共 16 个训练结果。模型、预测和日志按方案保存在本地 `models/traditional_ml/<方案>/`；性能对比表保存在 `reports/stage4/baseline_model_performance_comparison.csv`。测试集只用于最终记录，不参与调参或模型选择。
-
-详细说明见 [基线模型训练文档](docs/stage4/baseline_model_training.md)。
-
-基线训练后，可对四种训练方案下的四个传统模型进行仅基于训练集和验证集的 Optuna 调优：
-
-```bash
 python scripts/tune_primary_models.py --n-trials 5 --device gpu
-```
-
-该命令对 16 个“训练方案 × 模型”组合使用相同试验次数预算，不读取测试集，也不执行模型融合。调优前后结果见 `reports/stage4/model_tuning/`；测试集留给后续综合评估。详细说明见 [模型调优文档](docs/stage4/model_tuning.md)。
-
-完成调优后，可基于训练集 OOF 预测执行 Stacking 融合，并仅在验证集上与单模型比较：
-
-```bash
 python scripts/run_stacking_fusion.py --folds 5 --base-model-count 3
-```
-
-融合不会读取测试集。详细说明见 [模型融合文档](docs/stage4/model_stacking.md)。
-
-Issue2.5 确定候选方案后，可在测试集上进行一次最终综合评估：
-
-```bash
 python scripts/evaluate_final_models.py
+python scripts/analyze_model_interpretability.py
 ```
 
-评估输出测试集指标、ROC/PR 曲线、混淆矩阵和阈值敏感性分析，不重新训练或调参。详细说明见 [模型综合评估文档](docs/stage4/model_evaluation.md)。
-
-## 验证
+模型评估看板与 Stage 2 EDA 共用 Streamlit 入口：
 
 ```bash
-python -m pytest
+streamlit run dashboards/eda/app.py
 ```
 
-## 数据文件规则
+### Stage 5：本地批量推理
 
-`data/` 目录下的所有数据文件均存放在团队 Google Drive，禁止上传 GitHub；仓库只保留 `.gitkeep`。各目录用途见 [Data 目录说明](docs/data/data_structure.md)。
+先检查模型、预处理规则和 37 个最终特征是否齐全：
 
-## 文档入口
+```bash
+python scripts/run_batch_inference.py --check-only
+```
 
-- [统一口径](docs/project_definition.md)
-- [项目工作流程](docs/project_workflow.md)
-- [阶段一 Python 内部接口](docs/interfaces/internal/stage1_api.md)
-- [阶段一命令行接口](docs/interfaces/external/stage1_cli.md)
-- [Data 目录说明](docs/data/data_structure.md)
-- [数据质量检查与后续处理规则](docs/data/data_quality_rules.md)
-- [阶段一功能与性能测试结果](reports/stage1/stage1_test_results.md)
+按配置执行：
+
+```bash
+python scripts/run_batch_inference.py --config configs/stage5_inference.json
+```
+
+也可以显式指定输入输出：
+
+```bash
+python scripts/run_batch_inference.py \
+  --input data/interim/stage5_inference_test.parquet \
+  --output outputs/predictions/stage5_test_predictions.parquet \
+  --summary-output reports/stage5/stage5_test_inference_summary.json \
+  --batch-size 50000
+```
+
+预测字段说明见 [`docs/stage5/prediction_output_schema.md`](docs/stage5/prediction_output_schema.md)。
+
+## 测试
+
+运行全仓库测试：
+
+```bash
+python -m pytest -q
+```
+
+也可按阶段运行 `tests/functional/` 与 `tests/performance/` 中的测试。
+
+Stage 5 最近验证：
+
+```text
+Functional: 5 passed
+Performance: 1 passed
+Full test inference: 329,938 rows, status=passed
+```
+
+## 关键业务发现
+
+- 浏览行为占全部行为的 **94.24%**，购买行为仅占 **0.98%**，流量与购买之间存在显著数量落差。
+- 晚间 **20–22 点**是行为最集中的时段；浏览/收藏在 21 点达到峰值，加购/购买在 22 点达到峰值。
+- 最终模型的重要信号集中在**行为新鲜度、最近行为序列、商品加购、用户历史购买与用户/商品活跃度**等特征。
+- 测试集正样本率仅 **0.1867%**。默认阈值 0.5 对最终 XGBoost 过于保守，实际运营更适合使用购买概率排序、Top-K 人群或基于触达成本/收益确定阈值。
+- 长尾商品样本上的识别能力明显弱于非长尾商品，适合增加单独的长尾召回/探索策略，而不是仅依赖当前分类阈值。
+
+完整数据、模型结论和限制见 [`reports/stage6/final_project_report.md`](reports/stage6/final_project_report.md)。
+
+## 仓库结构
+
+```text
+configs/       运行配置
+dashboards/    Streamlit EDA / 模型看板
+data/          本地大数据目录，仅保留目录骨架
+docs/          口径、接口与运行文档
+models/        本地模型产物，仅保留说明/目录骨架
+outputs/       本地预测与运行产物
+reports/       各阶段轻量统计、测试记录与最终报告
+scripts/       CLI / pipeline 入口
+src/           核心实现
+tests/         功能与性能测试
+```
+
+## 最终文档入口
+
+- [项目定义与统一口径](docs/project_definition.md)
+- [完整项目运行流程](docs/project_workflow.md)
+- [Stage 2 特征看板说明](docs/stage2/feature_dashboard_guide.md)
+- [Stage 4 模型评估与解释看板](docs/stage4/model_dashboard.md)
+- [Stage 5 本地批量推理](docs/stage5/batch_inference.md)
+- [Stage 5 预测字段说明](docs/stage5/prediction_output_schema.md)
+- [最终项目报告](reports/stage6/final_project_report.md)
+- [项目复盘](reports/stage6/project_retrospective.md)
+- [GitHub 仓库与大文件检查](reports/stage6/repository_hygiene_report.md)
+
+## GitHub 文件规则
+
+以下内容不上传 GitHub：
+
+- `data/` 下的 CSV / Parquet 等数据文件
+- `models/` 下的模型二进制
+- `outputs/` 下的预测结果
+- 本地运行缓存、日志和临时压缩包
+
+仓库只保留能够复现流程的代码、配置、接口文档、测试与轻量报告。
