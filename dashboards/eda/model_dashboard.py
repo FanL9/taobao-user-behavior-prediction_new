@@ -125,7 +125,7 @@ def render_model_dashboard(report_root: str | Path = STAGE4_REPORT_ROOT) -> None
     """Render the Stage4 Model Evaluation & Interpretation section in the existing app."""
 
     st.divider()
-    st.markdown('<div id="model-evaluation"></div>', unsafe_allow_html=True)
+    st.markdown('<div id="modeling"></div><div id="model-evaluation"></div>', unsafe_allow_html=True)
     st.header("Model Evaluation & Interpretation")
     st.caption("Read-only view of precomputed Stage4 outputs. No model training or feature engineering runs in this dashboard.")
     try:

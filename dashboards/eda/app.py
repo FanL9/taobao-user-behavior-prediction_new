@@ -2,18 +2,34 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from data_loader import (
-    EDA_OUTPUT_DIR,
-    FEATURE_OUTPUT_DIR,
-    STAGE2_DASHBOARD_STATS_DIR,
-    STAGE2_FEATURE_FILES,
-    build_stage2_dashboard_statistics,
-    get_stage2_dataset_splits,
-    load_eda_outputs,
-    load_stage2_dashboard_outputs,
-    load_stage2_feature_inventory,
-)
-from model_dashboard import render_model_dashboard
+try:  # Supports both ``streamlit run`` and Streamlit's AppTest loader.
+    from dashboards.eda.data_loader import (
+        EDA_OUTPUT_DIR,
+        FEATURE_OUTPUT_DIR,
+        STAGE2_DASHBOARD_STATS_DIR,
+        STAGE2_FEATURE_FILES,
+        build_stage2_dashboard_statistics,
+        get_stage2_dataset_splits,
+        load_eda_outputs,
+        load_stage2_dashboard_outputs,
+        load_stage2_feature_inventory,
+    )
+    from dashboards.eda.model_dashboard import render_model_dashboard
+    from dashboards.eda.stage3_dashboard import render_stage3_dashboard
+except ModuleNotFoundError:  # pragma: no cover - direct script execution fallback
+    from data_loader import (
+        EDA_OUTPUT_DIR,
+        FEATURE_OUTPUT_DIR,
+        STAGE2_DASHBOARD_STATS_DIR,
+        STAGE2_FEATURE_FILES,
+        build_stage2_dashboard_statistics,
+        get_stage2_dataset_splits,
+        load_eda_outputs,
+        load_stage2_dashboard_outputs,
+        load_stage2_feature_inventory,
+    )
+    from model_dashboard import render_model_dashboard
+    from stage3_dashboard import render_stage3_dashboard
 
 
 st.set_page_config(
@@ -253,11 +269,25 @@ st.markdown(
     }
 
     .stage-card {
+        display: flex;
+        align-items: center;
         margin-bottom: 0.65rem;
         padding: 0.70rem 0.80rem;
         border-radius: 12px;
         background: rgba(59,130,246,0.07);
         border: 1px solid rgba(96,165,250,0.13);
+    }
+
+    a.stage-card {
+        color: inherit !important;
+        text-decoration: none !important;
+        transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+    }
+
+    a.stage-card:hover {
+        background: rgba(59,130,246,0.13);
+        border-color: rgba(96,165,250,0.30);
+        transform: translateX(3px);
     }
 
     .stage-number {
@@ -348,6 +378,18 @@ st.markdown(
     .future-stage strong {
         color: #64748b;
         font-weight: 650;
+    }
+
+    a.future-stage {
+        display: block;
+        text-decoration: none !important;
+        transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+
+    a.future-stage:hover {
+        color: #cbd5e1 !important;
+        background: rgba(59,130,246,0.07);
+        border-color: rgba(96,165,250,0.20);
     }
 
     /* ---------- Hero ---------- */
@@ -537,6 +579,59 @@ navigation_html = "".join(
     for section, index, label, anchor in NAV_ITEMS
 )
 
+
+def build_roadmap_item(
+    section: str,
+    index: str,
+    label: str,
+    anchor: str,
+    *,
+    primary: bool = False,
+) -> str:
+    """Build a clickable Stage 2–4 roadmap link in the sidebar."""
+
+    class_name = "stage-card" if primary else "future-stage"
+    return f"""
+    <a class="{class_name}" href="?section={section}#{anchor}" target="_self">
+        <span class="stage-number">{index}</span>
+        <span class="stage-name">{label}</span>
+    </a>
+    """
+
+
+roadmap_html = "".join(
+    (
+        build_roadmap_item(
+            "stage2", "02", "Feature Engineering", "stage2-feature-analysis", primary=True
+        ),
+        build_roadmap_item("modeling", "03", "Modeling", "modeling"),
+        build_roadmap_item(
+            "evaluation", "04", "Evaluation & Prediction", "model-evaluation"
+        ),
+    )
+)
+
+
+def build_stage_item(index: str, label: str, anchor: str) -> str:
+    """Build one of the four equal project-stage entry links."""
+
+    return f"""
+    <a class="stage-card" href="#{anchor}">
+        <span class="stage-number">{index}</span>
+        <span class="stage-name">{label}</span>
+    </a>
+    """
+
+
+stage_navigation_html = "".join(
+    (
+        build_stage_item("01", "Exploratory Analysis", "overview"),
+        build_stage_item("02", "Feature Engineering", "stage2-feature-analysis"),
+        build_stage_item("03", "Dataset Preparation", "stage3-data-preparation"),
+        build_stage_item("04", "Modeling & Evaluation", "model-evaluation"),
+    )
+)
+
 with st.sidebar:
     st.html(f"""
     <div class="sidebar-brand">
@@ -553,38 +648,10 @@ with st.sidebar:
     </div>
 
     <div class="nav-section-title">
-        Workspace
+        Project Stages
     </div>
 
-    <div class="stage-card">
-        <span class="stage-number">01</span>
-        <span class="stage-name">
-            Exploratory Analysis
-        </span>
-    </div>
-
-    {navigation_html}
-
-    <div class="nav-section-title">
-        Roadmap
-    </div>
-
-    <div class="stage-card">
-        <span class="stage-number">02</span>
-        <span class="stage-name">
-            Feature Engineering
-        </span>
-    </div>
-
-    <div class="future-stage">
-        <strong>03</strong>
-        &nbsp; Modeling
-    </div>
-
-    <div class="future-stage">
-        <strong>04</strong>
-        &nbsp; Evaluation & Prediction
-    </div>
+    {stage_navigation_html}
     """)
 
 
@@ -1999,4 +2066,5 @@ st.html(
     """
 )
 
+render_stage3_dashboard()
 render_model_dashboard()

@@ -8,9 +8,12 @@ import streamlit as st
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EDA_OUTPUT_DIR = REPO_ROOT / "data" / "interim"
+# Stage 1 writes EDA aggregates under data/EDA; data/interim is reserved for
+# Stage 2 intermediate tables.
+EDA_OUTPUT_DIR = REPO_ROOT / "data" / "EDA"
+INTERIM_DIR = REPO_ROOT / "data" / "interim"
 FEATURE_OUTPUT_DIR = REPO_ROOT / "data" / "features"
-STAGE2_DASHBOARD_STATS_DIR = EDA_OUTPUT_DIR / "stage2_dashboard"
+STAGE2_DASHBOARD_STATS_DIR = INTERIM_DIR / "stage2_dashboard"
 
 EDA_FILES = {
     "behavior_distribution": "behavior_distribution.csv",
